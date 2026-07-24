@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "SultiAI",
+    "slug": "sultiai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E6F9F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sultiai.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#1E6F9F"
+      },
+      "package": "com.sultiai.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
