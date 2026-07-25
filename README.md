@@ -1,6 +1,6 @@
 # SultiAI
 
-## AI Language Companion for Natural Conversations
+## AI Language Companion for Context-Aware Communication
 
 SultiAI is a Capstone Project developed by BSIT students of Jose Maria College Foundation, Inc.
 
@@ -12,7 +12,7 @@ The project is designed to help non-native speakers communicate more naturally a
 
 # Vision
 
-To become an intelligent communication companion that bridges language barriers through contextual AI assistance instead of simple word-for-word translation.
+To bridge language barriers by providing context-aware AI communication assistance that empowers users to communicate naturally and confidently in real-world situations.
 
 ---
 
