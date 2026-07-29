@@ -8,6 +8,7 @@ export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [level, setLevel] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -53,8 +54,15 @@ export function UserProvider({ children }) {
     } catch {}
   };
 
+  const refreshLevel = async () => {
+    try {
+      const lvl = await api.getTutorLevel();
+      setLevel(lvl);
+    } catch {}
+  };
+
   return (
-    <UserContext.Provider value={{ user, token, loading, signIn, signUp, signOut, refreshProfile }}>
+    <UserContext.Provider value={{ user, token, loading, level, refreshLevel, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </UserContext.Provider>
   );

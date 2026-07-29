@@ -1,9 +1,10 @@
 const http = require('http');
 const crypto = require('crypto');
-const mysql = require('mysql2/promise');
+const Database = require('better-sqlite3');
 const path = require('path');
+const { initSqlite, initMysql, getSqlite, getMysql, isMysqlConnected } = require('./db');
+const { initMysqlSchema } = require('./init-mysql');
 
-// Load .env manually (no dependencies)
 try {
   const fs = require('fs');
   const envPath = path.join(__dirname, '.env');
@@ -29,13 +30,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-12345';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-const DB_HOST = process.env.DB_HOST || 'localhost';
-const DB_PORT = parseInt(process.env.DB_PORT, 10) || 3306;
-const DB_USER = process.env.DB_USER || 'root';
-const DB_PASS = process.env.DB_PASS || '';
-const DB_NAME = process.env.DB_NAME || 'sultiai';
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'sultiai.db');
 
-let pool;
+let db;
+let mysql;
 
 function parseJSON(body) {
   try { return JSON.parse(body); } catch { return null; }
@@ -77,199 +75,218 @@ function verifyPassword(password, stored) {
   return verify === hash;
 }
 
-async function initDatabase() {
-  const conn = await mysql.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS });
-  await conn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-  await conn.query(`USE \`${DB_NAME}\``);
+function initDatabase() {
+  db.pragma('foreign_keys = ON');
 
-  // Drop old Phase 1 tables if they exist (schema changed)
-  await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-  await conn.query('DROP TABLE IF EXISTS users, conversations, community_resources');
-  await conn.query('SET FOREIGN_KEY_CHECKS = 1');
-
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS avatars (
-      avatar_id INT AUTO_INCREMENT PRIMARY KEY,
-      avatar_name VARCHAR(100) NOT NULL,
-      avatar_image VARCHAR(500) NOT NULL
+      avatar_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      avatar_name TEXT NOT NULL,
+      avatar_image TEXT NOT NULL
     )
   `);
 
-  const [avatarRows] = await conn.query('SELECT 1 FROM avatars WHERE avatar_id = 1');
-  if (avatarRows.length === 0) {
-    await conn.query('INSERT INTO avatars (avatar_id, avatar_name, avatar_image) VALUES (1, ?, ?)', ['Default', 'https://api.dicebear.com/7.x/avataaars/svg?seed=default']);
+  const avatarRow = db.prepare('SELECT 1 FROM avatars WHERE avatar_id = 1').get();
+  if (!avatarRow) {
+    db.prepare('INSERT INTO avatars (avatar_id, avatar_name, avatar_image) VALUES (1, ?, ?)').run('Default', 'https://api.dicebear.com/7.x/avataaars/svg?seed=default');
   }
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      user_id INT AUTO_INCREMENT PRIMARY KEY,
-      fullname VARCHAR(255) NOT NULL,
-      username VARCHAR(100),
-      email VARCHAR(255) NOT NULL UNIQUE,
-      password_hash VARCHAR(255) NOT NULL,
-      avatar_id INT DEFAULT 1,
-      preferred_lang VARCHAR(50) DEFAULT 'English',
-      learning_lang VARCHAR(50) DEFAULT 'Bisaya',
-      country VARCHAR(100),
-      role ENUM('user', 'admin') DEFAULT 'user',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fullname TEXT NOT NULL,
+      username TEXT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      avatar_id INTEGER DEFAULT 1,
+      preferred_lang TEXT DEFAULT 'English',
+      learning_lang TEXT DEFAULT 'Bisaya',
+      country TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (avatar_id) REFERENCES avatars(avatar_id) ON DELETE SET NULL
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS user_settings (
-      setting_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL UNIQUE,
-      dark_mode BOOLEAN DEFAULT FALSE,
-      speech_speed FLOAT DEFAULT 1.0,
-      voice_gender ENUM('male', 'female', 'neutral') DEFAULT 'neutral',
+      setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      dark_mode INTEGER DEFAULT 0,
+      speech_speed REAL DEFAULT 1.0,
+      voice_gender TEXT DEFAULT 'neutral',
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS saved_phrases (
-      phrase_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
+      phrase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
       phrase TEXT NOT NULL,
-      language VARCHAR(50),
-      category VARCHAR(100),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      language TEXT,
+      category TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS notifications (
-      notify_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      title VARCHAR(255),
+      notify_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT,
       message TEXT,
-      is_read BOOLEAN DEFAULT FALSE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS feedback (
-      feedback_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      functionality INT DEFAULT 0,
-      usability INT DEFAULT 0,
-      reliability INT DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      feedback_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      functionality INTEGER DEFAULT 0,
+      usability INTEGER DEFAULT 0,
+      reliability INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS conversations (
-      conversation_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      title VARCHAR(255),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      conversation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS conversation_messages (
-      message_id INT AUTO_INCREMENT PRIMARY KEY,
-      conversation_id INT NOT NULL,
-      sender ENUM('user', 'assistant') DEFAULT 'user',
+      message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      sender TEXT NOT NULL DEFAULT 'user',
       message TEXT,
       translated_message TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS speech_records (
-      speech_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      audio_path VARCHAR(500),
+      speech_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      audio_path TEXT,
       recognized_text TEXT,
-      language_detected VARCHAR(50),
-      confidence FLOAT DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      language_detected TEXT,
+      confidence REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS translations (
-      translation_id INT AUTO_INCREMENT PRIMARY KEY,
-      speech_id INT NOT NULL,
-      source_language VARCHAR(50),
-      target_language VARCHAR(50),
+      translation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      speech_id INTEGER NOT NULL,
+      source_language TEXT,
+      target_language TEXT,
       translated_text TEXT,
       FOREIGN KEY (speech_id) REFERENCES speech_records(speech_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS phrase_recommendations (
-      recommendation_id INT AUTO_INCREMENT PRIMARY KEY,
-      speech_id INT NOT NULL,
+      recommendation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      speech_id INTEGER NOT NULL,
       recommended_phrase TEXT,
-      intent VARCHAR(100),
-      confidence FLOAT DEFAULT 0,
+      intent TEXT,
+      confidence REAL DEFAULT 0,
       FOREIGN KEY (speech_id) REFERENCES speech_records(speech_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS learning_modules (
-      module_id INT AUTO_INCREMENT PRIMARY KEY,
-      module_title VARCHAR(255) NOT NULL,
-      difficulty ENUM('beginner', 'intermediate', 'advanced') DEFAULT 'beginner',
-      language VARCHAR(50),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      module_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      module_title TEXT NOT NULL,
+      difficulty TEXT DEFAULT 'beginner',
+      language TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS learning_progress (
-      progress_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      module_id INT NOT NULL,
-      completion_percent FLOAT DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      progress_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      module_id INTEGER NOT NULL,
+      completion_percent REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
       FOREIGN KEY (module_id) REFERENCES learning_modules(module_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS community_posts (
-      post_id INT AUTO_INCREMENT PRIMARY KEY,
-      user_id INT NOT NULL,
-      title VARCHAR(255),
+      post_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT,
       content TEXT,
       phrase TEXT,
       translation TEXT,
-      category VARCHAR(100),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      category TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS comments (
-      comment_id INT AUTO_INCREMENT PRIMARY KEY,
-      post_id INT NOT NULL,
-      user_id INT NOT NULL,
+      comment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
       comment TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
   `);
 
-  await conn.end();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS learner_profiles (
+      profile_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      level TEXT DEFAULT 'beginner',
+      strengths TEXT,
+      weak_areas TEXT,
+      common_mistakes TEXT,
+      total_xp INTEGER DEFAULT 0,
+      total_sessions INTEGER DEFAULT 0,
+      last_active TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tutor_sessions (
+      session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      messages TEXT,
+      summary TEXT,
+      started_at TEXT DEFAULT (datetime('now')),
+      ended_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    )
+  `);
+
   console.log('Database initialized');
 }
 
@@ -327,13 +344,13 @@ async function handleRequest(req, res) {
     if (pathname === '/api/auth/signup' && req.method === 'POST') {
       const { email, password, name, native_language = 'English', target_language = 'Bisaya' } = data || {};
       if (!email || !password) return send(res, 400, { error: 'Email and password required' });
-      const [existing] = await pool.query('SELECT 1 FROM users WHERE email = ?', [email]);
-      if (existing.length > 0) return send(res, 409, { error: 'Account already exists' });
+      const existing = db.prepare('SELECT 1 FROM users WHERE email = ?').get(email);
+      if (existing) return send(res, 409, { error: 'Account already exists' });
       const fullname = name || email.split('@')[0];
       const username = fullname.toLowerCase().replace(/[^a-z0-9]/g, '') + Date.now().toString(36);
-      const [result] = await pool.query('INSERT INTO users (fullname, username, email, password_hash, preferred_lang, learning_lang) VALUES (?, ?, ?, ?, ?, ?)', [fullname, username, email, hashPassword(password), native_language, target_language]);
-      const userId = result.insertId;
-      await pool.query('INSERT INTO user_settings (user_id) VALUES (?)', [userId]);
+      const result = db.prepare('INSERT INTO users (fullname, username, email, password_hash, preferred_lang, learning_lang) VALUES (?, ?, ?, ?, ?, ?)').run(fullname, username, email, hashPassword(password), native_language, target_language);
+      const userId = Number(result.lastInsertRowid);
+      db.prepare('INSERT INTO user_settings (user_id) VALUES (?)').run(userId);
       const token = signToken({ email, userId });
       return send(res, 200, { message: 'User registered successfully', token, user: { name: fullname, email, native_language, target_language } });
     }
@@ -341,8 +358,7 @@ async function handleRequest(req, res) {
     if (pathname === '/api/auth/signin' && req.method === 'POST') {
       const { email, password } = data || {};
       if (!email || !password) return send(res, 400, { error: 'Email and password required' });
-      const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-      const user = rows[0];
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
       if (!user || !verifyPassword(password, user.password_hash)) return send(res, 401, { error: 'Invalid credentials' });
       const token = signToken({ email, userId: user.user_id });
       return send(res, 200, { token, user: { name: user.fullname, email, native_language: user.preferred_lang || 'English', target_language: user.learning_lang || 'Bisaya' } });
@@ -360,16 +376,14 @@ async function handleRequest(req, res) {
 
     // User profile
     if (pathname === '/api/users/me' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT u.user_id, u.fullname, u.username, u.email, u.preferred_lang, u.learning_lang, u.country, u.role, u.created_at, a.avatar_name, a.avatar_image FROM users u LEFT JOIN avatars a ON u.avatar_id = a.avatar_id WHERE u.email = ?', [session.email]);
-      const user = rows[0];
+      const user = db.prepare('SELECT u.user_id, u.fullname, u.username, u.email, u.preferred_lang, u.learning_lang, u.country, u.role, u.created_at, a.avatar_name, a.avatar_image FROM users u LEFT JOIN avatars a ON u.avatar_id = a.avatar_id WHERE u.email = ?').get(session.email);
       if (!user) return send(res, 404, { error: 'User not found' });
       return send(res, 200, { name: user.fullname, email: user.email, native_language: user.preferred_lang || 'English', target_language: user.learning_lang || 'Bisaya', username: user.username, country: user.country, role: user.role, avatar: { name: user.avatar_name, image: user.avatar_image }, created_at: user.created_at });
     }
 
     if (pathname === '/api/users/me' && req.method === 'PUT') {
       const { name, native_language, target_language, username, country, avatar_id } = data || {};
-      const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [session.email]);
-      const user = rows[0];
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(session.email);
       if (!user) return send(res, 404, { error: 'User not found' });
       const updatedFullname = name !== undefined ? name : user.fullname;
       const updatedPreferred = native_language !== undefined ? native_language : user.preferred_lang;
@@ -377,13 +391,13 @@ async function handleRequest(req, res) {
       const updatedUsername = username !== undefined ? username : user.username;
       const updatedCountry = country !== undefined ? country : user.country;
       const updatedAvatar = avatar_id !== undefined ? avatar_id : user.avatar_id;
-      await pool.query('UPDATE users SET fullname = ?, preferred_lang = ?, learning_lang = ?, username = ?, country = ?, avatar_id = ? WHERE email = ?', [updatedFullname, updatedPreferred, updatedLearning, updatedUsername, updatedCountry, updatedAvatar, session.email]);
+      db.prepare('UPDATE users SET fullname = ?, preferred_lang = ?, learning_lang = ?, username = ?, country = ?, avatar_id = ? WHERE email = ?').run(updatedFullname, updatedPreferred, updatedLearning, updatedUsername, updatedCountry, updatedAvatar, session.email);
       return send(res, 200, { name: updatedFullname, email: session.email, native_language: updatedPreferred || 'English', target_language: updatedLearning || 'Bisaya' });
     }
 
     // History
     if (pathname === '/api/history' && req.method === 'GET') {
-      const [convos] = await pool.query('SELECT c.conversation_id, c.title, c.created_at, m.sender, m.message, m.translated_message FROM conversations c LEFT JOIN conversation_messages m ON c.conversation_id = m.conversation_id WHERE c.user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY c.created_at DESC', [session.email]);
+      const convos = db.prepare('SELECT c.conversation_id, c.title, c.created_at, m.sender, m.message, m.translated_message FROM conversations c LEFT JOIN conversation_messages m ON c.conversation_id = m.conversation_id WHERE c.user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY c.created_at DESC').all(session.email);
       const convoMap = new Map();
       for (const row of convos) {
         if (!convoMap.has(row.conversation_id)) {
@@ -398,13 +412,13 @@ async function handleRequest(req, res) {
 
     if (pathname.startsWith('/api/history/') && req.method === 'DELETE') {
       const historyId = pathname.split('/api/history/')[1];
-      await pool.query('DELETE FROM conversations WHERE conversation_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)', [historyId, session.email]);
+      db.prepare('DELETE FROM conversations WHERE conversation_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)').run(historyId, session.email);
       return send(res, 200, { message: 'History deleted successfully' });
     }
 
     // Conversations
     if (pathname === '/api/conversations' && req.method === 'GET') {
-      const [convos] = await pool.query('SELECT c.conversation_id, c.title, c.created_at, m.sender, m.message, m.translated_message FROM conversations c LEFT JOIN conversation_messages m ON c.conversation_id = m.conversation_id WHERE c.user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY c.created_at DESC', [session.email]);
+      const convos = db.prepare('SELECT c.conversation_id, c.title, c.created_at, m.sender, m.message, m.translated_message FROM conversations c LEFT JOIN conversation_messages m ON c.conversation_id = m.conversation_id WHERE c.user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY c.created_at DESC').all(session.email);
       const convoMap = new Map();
       for (const row of convos) {
         if (!convoMap.has(row.conversation_id)) {
@@ -419,14 +433,15 @@ async function handleRequest(req, res) {
 
     if (pathname === '/api/conversations' && req.method === 'POST') {
       const { messages, title } = data || {};
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [convResult] = await pool.query('INSERT INTO conversations (user_id, title) VALUES (?, ?)', [userId, title || null]);
-      const conversationId = convResult.insertId;
+      const convResult = db.prepare('INSERT INTO conversations (user_id, title) VALUES (?, ?)').run(userId, title || null);
+      const conversationId = Number(convResult.lastInsertRowid);
       if (messages && Array.isArray(messages)) {
+        const insertMsg = db.prepare('INSERT INTO conversation_messages (conversation_id, sender, message) VALUES (?, ?, ?)');
         for (const msg of messages) {
-          await pool.query('INSERT INTO conversation_messages (conversation_id, sender, message) VALUES (?, ?, ?)', [conversationId, msg.type || 'user', msg.text || '']);
+          insertMsg.run(conversationId, msg.type || 'user', msg.text || '');
         }
       }
       return send(res, 200, { id: String(conversationId), title: title || null, messages: messages || [], createdAt: new Date().toISOString() });
@@ -434,17 +449,17 @@ async function handleRequest(req, res) {
 
     // Community resources
     if (pathname === '/api/community/resources' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT cp.*, u.fullname AS author_name FROM community_posts cp LEFT JOIN users u ON cp.user_id = u.user_id ORDER BY cp.created_at DESC');
+      const rows = db.prepare('SELECT cp.*, u.fullname AS author_name FROM community_posts cp LEFT JOIN users u ON cp.user_id = u.user_id ORDER BY cp.created_at DESC').all();
       return send(res, 200, rows.map(r => ({ id: String(r.post_id), phrase: r.phrase, translation: r.translation, category: r.category, title: r.title, content: r.content, created_by: r.author_name, createdAt: r.created_at })));
     }
 
     if (pathname === '/api/community/resources' && req.method === 'POST') {
       const { phrase, translation, category, title, content } = data || {};
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [result] = await pool.query('INSERT INTO community_posts (user_id, title, content, phrase, translation, category) VALUES (?, ?, ?, ?, ?, ?)', [userId, title || null, content || null, phrase || null, translation || null, category || null]);
-      return send(res, 200, { id: String(result.insertId), phrase, translation, category, title, content, created_by: session.email, createdAt: new Date().toISOString() });
+      const result = db.prepare('INSERT INTO community_posts (user_id, title, content, phrase, translation, category) VALUES (?, ?, ?, ?, ?, ?)').run(userId, title || null, content || null, phrase || null, translation || null, category || null);
+      return send(res, 200, { id: String(result.lastInsertRowid), phrase, translation, category, title, content, created_by: session.email, createdAt: new Date().toISOString() });
     }
 
     // Translation
@@ -584,7 +599,7 @@ async function handleRequest(req, res) {
       const { text } = data || {};
       if (!text) return send(res, 400, { error: 'Text is required' });
       if (!GROQ_API_KEY) return send(res, 200, { score: 85, feedback: "Good pronunciation! Keep practicing the vowel sounds.", note: "Groq API key not configured for detailed analysis" });
-      const systemPrompt = `You are a pronunciation coach. Analyze the given text and provide:\n1. A pronunciation score (0-100)\n2. Constructive feedback\nReturn ONLY a JSON object with "score" (number) and "feedback" (string) fields.`;
+      const systemPrompt = 'You are a Bisaya (Cebuano) pronunciation coach. Analyze the given text.\nReturn ONLY a valid JSON object with exactly these fields:\n- "score": number 0-100\n- "feedback": string with specific sound corrections\n- "phoneme_breakdown": array of {"expected": string, "heard": string, "correct": boolean, "tip": string}\n\nBisaya pronunciation rules:\n- "a" is "ah" like in "father"\n- "e" is "eh" like in "bed"\n- "i" is "ee" like in "see"\n- "o" is "oh" like in "slow"\n- "u" is "oo" like in "food"\n- "ng" is a single sound like in "singing"';
       const apiMessages = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Pronunciation text: "${text}"` }
@@ -611,62 +626,63 @@ async function handleRequest(req, res) {
     // Settings
     if (pathname === '/api/settings/language' && req.method === 'PUT') {
       const { native_language, learning_language } = data || {};
-      const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [session.email]);
-      const user = rows[0];
+      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(session.email);
       if (!user) return send(res, 404, { error: 'User not found' });
       const updatedPreferred = native_language !== undefined ? native_language : user.preferred_lang;
       const updatedLearning = learning_language !== undefined ? learning_language : user.learning_lang;
-      await pool.query('UPDATE users SET preferred_lang = ?, learning_lang = ? WHERE email = ?', [updatedPreferred, updatedLearning, session.email]);
+      db.prepare('UPDATE users SET preferred_lang = ?, learning_lang = ? WHERE email = ?').run(updatedPreferred, updatedLearning, session.email);
       return send(res, 200, { message: 'Settings updated successfully', native_language: updatedPreferred, learning_language: updatedLearning });
     }
 
     // User settings
     if (pathname === '/api/user/settings' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT us.* FROM user_settings us JOIN users u ON us.user_id = u.user_id WHERE u.email = ?', [session.email]);
-      if (!rows[0]) return send(res, 200, { dark_mode: false, speech_speed: 1.0, voice_gender: 'neutral' });
-      return send(res, 200, rows[0]);
+      const row = db.prepare('SELECT us.* FROM user_settings us JOIN users u ON us.user_id = u.user_id WHERE u.email = ?').get(session.email);
+      if (!row) return send(res, 200, { dark_mode: false, speech_speed: 1.0, voice_gender: 'neutral' });
+      return send(res, 200, row);
     }
 
     if (pathname === '/api/user/settings' && req.method === 'PUT') {
       const { dark_mode, speech_speed, voice_gender } = data || {};
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      await pool.query('UPDATE user_settings SET dark_mode = COALESCE(?, dark_mode), speech_speed = COALESCE(?, speech_speed), voice_gender = COALESCE(?, voice_gender) WHERE user_id = ?', [dark_mode, speech_speed, voice_gender, userId]);
+      db.prepare('UPDATE user_settings SET dark_mode = COALESCE(?, dark_mode), speech_speed = COALESCE(?, speech_speed), voice_gender = COALESCE(?, voice_gender) WHERE user_id = ?').run(dark_mode ?? null, speech_speed ?? null, voice_gender ?? null, userId);
       return send(res, 200, { message: 'Settings updated successfully' });
     }
 
     // Saved phrases
     if (pathname === '/api/saved-phrases' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT * FROM saved_phrases WHERE user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY created_at DESC', [session.email]);
+      const rows = db.prepare('SELECT * FROM saved_phrases WHERE user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY created_at DESC').all(session.email);
       return send(res, 200, rows);
     }
 
     if (pathname === '/api/saved-phrases' && req.method === 'POST') {
       const { phrase, language, category } = data || {};
       if (!phrase) return send(res, 400, { error: 'Phrase is required' });
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [result] = await pool.query('INSERT INTO saved_phrases (user_id, phrase, language, category) VALUES (?, ?, ?, ?)', [userId, phrase, language || null, category || null]);
-      return send(res, 200, { phrase_id: result.insertId, phrase, language, category });
+      const result = db.prepare('INSERT INTO saved_phrases (user_id, phrase, language, category) VALUES (?, ?, ?, ?)').run(userId, phrase, language || null, category || null);
+      return send(res, 200, { phrase_id: result.lastInsertRowid, phrase, language, category });
     }
 
     if (pathname.startsWith('/api/saved-phrases/') && req.method === 'DELETE') {
       const phraseId = pathname.split('/api/saved-phrases/')[1];
-      await pool.query('DELETE FROM saved_phrases WHERE phrase_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)', [phraseId, session.email]);
+      db.prepare('DELETE FROM saved_phrases WHERE phrase_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)').run(phraseId, session.email);
       return send(res, 200, { message: 'Phrase deleted successfully' });
     }
 
     // Notifications
     if (pathname === '/api/notifications' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT * FROM notifications WHERE user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY created_at DESC', [session.email]);
+      const rows = db.prepare('SELECT * FROM notifications WHERE user_id = (SELECT user_id FROM users WHERE email = ?) ORDER BY created_at DESC').all(session.email);
       if (rows.length === 0) {
-        const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-        const userId = userRows[0]?.user_id;
+        const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+        const userId = userRow?.user_id;
         if (userId) {
-          await pool.query('INSERT INTO notifications (user_id, title, message, is_read) VALUES (?, ?, ?, ?), (?, ?, ?, ?)', [userId, 'Welcome!', 'Practice your daily Bisaya phrases!', false, userId, 'Update', 'New community resources available!', false]);
-          const [fresh] = await pool.query('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+          const insertNotif = db.prepare('INSERT INTO notifications (user_id, title, message, is_read) VALUES (?, ?, ?, ?)');
+          insertNotif.run(userId, 'Welcome!', 'Practice your daily Bisaya phrases!', 0);
+          insertNotif.run(userId, 'Update', 'New community resources available!', 0);
+          const fresh = db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(userId);
           return send(res, 200, fresh);
         }
       }
@@ -675,66 +691,66 @@ async function handleRequest(req, res) {
 
     if (pathname.startsWith('/api/notifications/') && req.method === 'PUT') {
       const notifyId = pathname.split('/api/notifications/')[1];
-      await pool.query('UPDATE notifications SET is_read = TRUE WHERE notify_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)', [notifyId, session.email]);
+      db.prepare('UPDATE notifications SET is_read = 1 WHERE notify_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)').run(notifyId, session.email);
       return send(res, 200, { message: 'Notification marked as read' });
     }
 
     // Feedback
     if (pathname === '/api/feedback' && req.method === 'POST') {
       const { functionality, usability, reliability } = data || {};
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      await pool.query('INSERT INTO feedback (user_id, functionality, usability, reliability) VALUES (?, ?, ?, ?)', [userId, functionality || 0, usability || 0, reliability || 0]);
+      db.prepare('INSERT INTO feedback (user_id, functionality, usability, reliability) VALUES (?, ?, ?, ?)').run(userId, functionality || 0, usability || 0, reliability || 0);
       return send(res, 200, { message: 'Feedback submitted successfully' });
     }
 
     // Learning modules
     if (pathname === '/api/learning/modules' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT * FROM learning_modules ORDER BY module_id');
+      const rows = db.prepare('SELECT * FROM learning_modules ORDER BY module_id').all();
       return send(res, 200, rows);
     }
 
     if (pathname === '/api/learning/progress' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT lp.*, lm.module_title, lm.difficulty FROM learning_progress lp JOIN learning_modules lm ON lp.module_id = lm.module_id WHERE lp.user_id = (SELECT user_id FROM users WHERE email = ?)', [session.email]);
+      const rows = db.prepare('SELECT lp.*, lm.module_title, lm.difficulty FROM learning_progress lp JOIN learning_modules lm ON lp.module_id = lm.module_id WHERE lp.user_id = (SELECT user_id FROM users WHERE email = ?)').all(session.email);
       return send(res, 200, rows);
     }
 
     if (pathname === '/api/learning/progress' && req.method === 'POST') {
       const { module_id, completion_percent } = data || {};
       if (!module_id) return send(res, 400, { error: 'Module ID is required' });
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [existing] = await pool.query('SELECT progress_id FROM learning_progress WHERE user_id = ? AND module_id = ?', [userId, module_id]);
-      if (existing.length > 0) {
-        await pool.query('UPDATE learning_progress SET completion_percent = ? WHERE progress_id = ?', [completion_percent || 0, existing[0].progress_id]);
+      const existing = db.prepare('SELECT progress_id FROM learning_progress WHERE user_id = ? AND module_id = ?').get(userId, module_id);
+      if (existing) {
+        db.prepare('UPDATE learning_progress SET completion_percent = ? WHERE progress_id = ?').run(completion_percent || 0, existing.progress_id);
       } else {
-        await pool.query('INSERT INTO learning_progress (user_id, module_id, completion_percent) VALUES (?, ?, ?)', [userId, module_id, completion_percent || 0]);
+        db.prepare('INSERT INTO learning_progress (user_id, module_id, completion_percent) VALUES (?, ?, ?)').run(userId, module_id, completion_percent || 0);
       }
       return send(res, 200, { message: 'Progress updated successfully' });
     }
 
     // Community posts
     if (pathname === '/api/community/posts' && req.method === 'GET') {
-      const [rows] = await pool.query('SELECT cp.*, u.fullname AS author_name FROM community_posts cp LEFT JOIN users u ON cp.user_id = u.user_id ORDER BY cp.created_at DESC');
+      const rows = db.prepare('SELECT cp.*, u.fullname AS author_name FROM community_posts cp LEFT JOIN users u ON cp.user_id = u.user_id ORDER BY cp.created_at DESC').all();
       return send(res, 200, rows.map(r => ({ id: r.post_id, user_id: r.user_id, title: r.title, content: r.content, author: r.author_name, created_at: r.created_at })));
     }
 
     if (pathname === '/api/community/posts' && req.method === 'POST') {
       const { title, content } = data || {};
       if (!title || !content) return send(res, 400, { error: 'Title and content are required' });
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [result] = await pool.query('INSERT INTO community_posts (user_id, title, content) VALUES (?, ?, ?)', [userId, title, content]);
-      return send(res, 200, { id: result.insertId, title, content, created_at: new Date().toISOString() });
+      const result = db.prepare('INSERT INTO community_posts (user_id, title, content) VALUES (?, ?, ?)').run(userId, title, content);
+      return send(res, 200, { id: result.lastInsertRowid, title, content, created_at: new Date().toISOString() });
     }
 
     // Comments
     if (pathname.startsWith('/api/community/posts/') && pathname.endsWith('/comments') && req.method === 'GET') {
       const postId = pathname.split('/api/community/posts/')[1].split('/')[0];
-      const [rows] = await pool.query('SELECT c.*, u.fullname AS author_name FROM comments c LEFT JOIN users u ON c.user_id = u.user_id WHERE c.post_id = ? ORDER BY c.created_at ASC', [postId]);
+      const rows = db.prepare('SELECT c.*, u.fullname AS author_name FROM comments c LEFT JOIN users u ON c.user_id = u.user_id WHERE c.post_id = ? ORDER BY c.created_at ASC').all(postId);
       return send(res, 200, rows);
     }
 
@@ -742,11 +758,11 @@ async function handleRequest(req, res) {
       const postId = pathname.split('/api/community/posts/')[1].split('/')[0];
       const { comment } = data || {};
       if (!comment) return send(res, 400, { error: 'Comment is required' });
-      const [userRows] = await pool.query('SELECT user_id FROM users WHERE email = ?', [session.email]);
-      const userId = userRows[0]?.user_id;
+      const userRow = db.prepare('SELECT user_id FROM users WHERE email = ?').get(session.email);
+      const userId = userRow?.user_id;
       if (!userId) return send(res, 404, { error: 'User not found' });
-      const [result] = await pool.query('INSERT INTO comments (post_id, user_id, comment) VALUES (?, ?, ?)', [postId, userId, comment]);
-      return send(res, 200, { comment_id: result.insertId, post_id: parseInt(postId), user_id: userId, comment, created_at: new Date().toISOString() });
+      const result = db.prepare('INSERT INTO comments (post_id, user_id, comment) VALUES (?, ?, ?)').run(postId, userId, comment);
+      return send(res, 200, { comment_id: result.lastInsertRowid, post_id: parseInt(postId), user_id: userId, comment, created_at: new Date().toISOString() });
     }
 
     // AI Assistant chat
@@ -754,8 +770,8 @@ async function handleRequest(req, res) {
       const { message, language } = data || {};
       if (!message) return send(res, 400, { error: 'Message is required' });
       if (!GROQ_API_KEY) return send(res, 500, { error: 'Groq API key not configured' });
-      const [userRows] = await pool.query('SELECT preferred_lang FROM users WHERE email = ?', [session.email]);
-      const nativeLanguage = userRows[0]?.preferred_lang || 'English';
+      const userRow = db.prepare('SELECT preferred_lang FROM users WHERE email = ?').get(session.email);
+      const nativeLanguage = userRow?.preferred_lang || 'English';
       const systemPrompt = `You are "Hoy!", an enthusiastic and patient AI Bisaya (Cebuano) language tutor!
 
 Your Mission:
@@ -813,6 +829,220 @@ Make sure all Bisaya phrases are easy to say out loud! Keep the tone warm and su
       return send(res, 200, { content: groqData.choices[0].message.content });
     }
 
+    // Tutor level
+    if (pathname === '/api/tutor/level' && req.method === 'GET') {
+      const row = db.prepare('SELECT level, strengths, weak_areas, common_mistakes, total_xp, total_sessions, last_active FROM learner_profiles WHERE user_id = (SELECT user_id FROM users WHERE email = ?)').get(session.email);
+      if (!row) {
+        db.prepare('INSERT INTO learner_profiles (user_id) VALUES ((SELECT user_id FROM users WHERE email = ?))').run(session.email);
+        return send(res, 200, { level: 'beginner', strengths: [], weak_areas: [], common_mistakes: [], total_xp: 0, total_sessions: 0 });
+      }
+      return send(res, 200, row);
+    }
+
+    // Tutor mistakes
+    if (pathname === '/api/tutor/mistakes' && req.method === 'GET') {
+      const row = db.prepare('SELECT common_mistakes FROM learner_profiles WHERE user_id = (SELECT user_id FROM users WHERE email = ?)').get(session.email);
+      if (!row) return send(res, 200, []);
+      return send(res, 200, row.common_mistakes || []);
+    }
+
+    // Generate lesson
+    if (pathname === '/api/tutor/lesson' && req.method === 'POST') {
+      const { situation } = data || {};
+      if (!situation) return send(res, 400, { error: 'Situation is required' });
+      if (!GROQ_API_KEY) return send(res, 500, { error: 'Groq API key not configured' });
+      const systemPrompt = 'You are a Bisaya (Cebuano) language lesson creator. Create a short interactive lesson for the given situation.\nReturn ONLY a valid JSON object (no other text) with this structure:\n{\n  "situation": "string",\n  "text": "short intro paragraph explaining what the user will learn",\n  "phrases": [\n    { "bisaya": "Bisaya phrase", "english": "English translation", "pronunciation": "phonetic guide" }\n  ],\n  "dialogue": [\n    { "speaker": "person role", "bisaya": "what they say", "english": "translation" }\n  ],\n  "cultural_note": "relevant cultural context",\n  "practice_suggestions": ["tip 1", "tip 2"]\n}';
+      const apiMessages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Create a lesson for: ' + situation }
+      ];
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: GROQ_MODEL, messages: apiMessages, temperature: 0.7, max_tokens: 1200 }),
+      });
+      if (!groqRes.ok) return send(res, 500, { error: 'Lesson generation failed' });
+      const groqData = await groqRes.json();
+      try {
+        const lesson = JSON.parse(groqData.choices[0].message.content);
+        return send(res, 200, { role: 'lesson', ...lesson });
+      } catch {
+        return send(res, 200, { role: 'lesson', situation, text: groqData.choices[0].message.content, phrases: [], dialogue: [] });
+      }
+    }
+
+    // Tutor chat
+    if (pathname === '/api/tutor/chat' && req.method === 'POST') {
+      const { message, audio, session_id } = data || {};
+      if (!message && !audio) return send(res, 400, { error: 'Message or audio is required' });
+      if (!GROQ_API_KEY) return send(res, 500, { error: 'Groq API key not configured' });
+
+      let text = message || '';
+      let transcription = null;
+      let pronunciation = null;
+
+      if (audio) {
+        try {
+          const audioBuffer = Buffer.from(audio, 'base64');
+          const boundary = '----FormBoundary' + Date.now();
+          const header = Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="recording.m4a"\r\nContent-Type: audio/mp4\r\n\r\n');
+          const footer = Buffer.from('\r\n--' + boundary + '\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3\r\n--' + boundary + '--');
+          const multipartBody = Buffer.concat([header, audioBuffer, footer]);
+          const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'multipart/form-data; boundary=' + boundary },
+            body: multipartBody,
+          });
+          if (groqRes.ok) {
+            const groqData = await groqRes.json();
+            text = groqData.text || '';
+            transcription = text;
+          }
+        } catch (err) {
+          console.error('Transcription error:', err);
+        }
+      }
+
+      if (!text) return send(res, 400, { error: 'Could not transcribe audio and no text provided' });
+
+      const profileRow = db.prepare('SELECT * FROM learner_profiles WHERE user_id = (SELECT user_id FROM users WHERE email = ?)').get(session.email);
+      let learnerLevel = 'beginner';
+      let learnerStrengths = [];
+      let learnerWeakAreas = [];
+      let learnerMistakes = [];
+      if (!profileRow) {
+        db.prepare('INSERT INTO learner_profiles (user_id) VALUES ((SELECT user_id FROM users WHERE email = ?))').run(session.email);
+      } else {
+        learnerLevel = profileRow.level || 'beginner';
+        try { learnerStrengths = typeof profileRow.strengths === 'string' ? JSON.parse(profileRow.strengths) : (profileRow.strengths || []); } catch { learnerStrengths = []; }
+        try { learnerWeakAreas = typeof profileRow.weak_areas === 'string' ? JSON.parse(profileRow.weak_areas) : (profileRow.weak_areas || []); } catch { learnerWeakAreas = []; }
+        try { learnerMistakes = typeof profileRow.common_mistakes === 'string' ? JSON.parse(profileRow.common_mistakes) : (profileRow.common_mistakes || []); } catch { learnerMistakes = []; }
+      }
+
+      let sessionMessages = [];
+      let currentSessionId = session_id;
+      if (session_id) {
+        const sessionRow = db.prepare('SELECT messages FROM tutor_sessions WHERE session_id = ? AND user_id = (SELECT user_id FROM users WHERE email = ?)').get(session_id, session.email);
+        if (sessionRow) {
+          try { sessionMessages = typeof sessionRow.messages === 'string' ? JSON.parse(sessionRow.messages) : (sessionRow.messages || []); } catch { sessionMessages = []; }
+        }
+      }
+
+      const levelInstructions = {
+        beginner: '- Teach word-by-word with clear pronunciation\n- Use very simple sentences\n- Repeat key vocabulary 3 times\n- Always provide phonetic pronunciation guides\n- Praise effort heavily',
+        intermediate: '- Expand to full sentences\n- Introduce common slang and casual forms\n- Correct grammar gently\n- Ask the user to repeat and practice\n- Introduce cultural context',
+        advanced: '- Use natural speed conversation\n- Correct nuance and regional variations\n- Discuss cultural idioms and proverbs\n- Challenge with complex scenarios\n- Provide detailed feedback on word choice'
+      };
+
+      const mistakesContext = learnerMistakes.length > 0
+        ? '\nTheir common mistakes:\n' + learnerMistakes.slice(0, 5).map(function(m) { return '- "' + m.pattern + '" should be "' + m.correction + '" (' + m.count + 'x errors)'; }).join('\n') + '\nProactively correct these when they appear.'
+        : '';
+
+      const weakAreaContext = learnerWeakAreas.length > 0
+        ? '\nTheir weak areas: ' + learnerWeakAreas.slice(0, 3).join(', ') + '\nFocus extra attention on these topics.'
+        : '';
+
+      const systemPrompt = 'You are "Hoy!", an enthusiastic and patient AI Bisaya (Cebuano) language tutor!\n\nThis learner is at: ' + learnerLevel + ' level.\n' + mistakesContext + '\n' + weakAreaContext + '\n\nTeaching approach for their level:\n' + (levelInstructions[learnerLevel] || levelInstructions.beginner) + '\n\nYour Mission:\n- Help users learn and practice SPEAKING Bisaya (Cebuano)\n- Make responses clear and easy to pronounce\n- Focus on practical, everyday phrases\n\nTeaching Style:\n- Friendly, conversational, and encouraging\n- Use emojis to make learning fun\n- Keep explanations simple\n- Keep sentences short and speakable\n\nYour Expertise:\n- Teach Bisaya/Cebuano to English speakers\n- Show formal vs everyday Bisaya (slang & casual)\n- Share cultural context and usage tips\n- Write Bisaya phrases in quotation marks like "Maayong buntag"\n- Give pronunciation guides in simple terms\n- Always include English translations\n\nAfter your teaching reply, append a JSON analysis block on its own line like this:\n__ANALYSIS__{"detected_mistakes":[{"pattern":"wrong","correction":"right","count":1}],"topics":["topic1"],"user_level":"' + learnerLevel + '"}__END__';
+
+      const apiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...sessionMessages,
+        { role: 'user', content: text }
+      ];
+
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: GROQ_MODEL, messages: apiMessages, temperature: 0.8, max_tokens: 1000 }),
+      });
+
+      if (!groqRes.ok) return send(res, 500, { error: 'AI tutor request failed' });
+
+      const groqData = await groqRes.json();
+      let reply = groqData.choices[0].message.content || '';
+
+      let analysis = { detected_mistakes: [], topics: [], user_level: learnerLevel };
+      const analysisMatch = reply.match(/__ANALYSIS__({.*?})__END__/);
+      if (analysisMatch) {
+        try {
+          const parsed = JSON.parse(analysisMatch[1]);
+          analysis = { ...analysis, ...parsed };
+          reply = reply.replace(/__ANALYSIS__\{.*?\}__END__/, '').trim();
+        } catch {}
+      }
+
+      if (audio && transcription) {
+        try {
+          const pronRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: GROQ_MODEL, messages: [
+              { role: 'system', content: 'You are a Bisaya pronunciation coach. Analyze the given text. Return ONLY a valid JSON object with: "score" (0-100), "feedback" (string), "phoneme_breakdown" (array of {expected, heard, correct, tip}).' },
+              { role: 'user', content: 'Analyze pronunciation for this Bisaya text: "' + transcription + '"' }
+            ], temperature: 0.3, max_tokens: 500 }),
+          });
+          if (pronRes.ok) {
+            const pronData = await pronRes.json();
+            try {
+              pronunciation = JSON.parse(pronData.choices[0].message.content);
+            } catch {
+              pronunciation = { score: 85, feedback: pronData.choices[0].message.content, phoneme_breakdown: [] };
+            }
+          }
+        } catch {}
+      }
+
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      if (profileRow) {
+        const newMistakes = analysis.detected_mistakes || [];
+        for (const nm of newMistakes) {
+          const existing = learnerMistakes.find(function(m) { return m.pattern === nm.pattern; });
+          if (existing) {
+            existing.count = (existing.count || 1) + (nm.count || 1);
+          } else {
+            learnerMistakes.push({ pattern: nm.pattern, correction: nm.correction, count: nm.count || 1 });
+          }
+        }
+        learnerMistakes.sort(function(a, b) { return (b.count || 0) - (a.count || 0); });
+        const topMistakes = learnerMistakes.slice(0, 10);
+
+        const topics = analysis.topics || [];
+        for (const t of topics) {
+          if (analysis.user_level === 'advanced' || !newMistakes || newMistakes.length === 0) {
+            if (!learnerStrengths.includes(t)) learnerStrengths.push(t);
+          } else {
+            if (!learnerWeakAreas.includes(t)) learnerWeakAreas.push(t);
+          }
+        }
+        const topStrengths = learnerStrengths.slice(-10);
+        const topWeakAreas = learnerWeakAreas.slice(-10);
+
+        db.prepare(
+          'UPDATE learner_profiles SET level = ?, strengths = ?, weak_areas = ?, common_mistakes = ?, total_xp = total_xp + 10, total_sessions = total_sessions + CASE WHEN ? IS NULL THEN 0 ELSE 1 END, last_active = ? WHERE user_id = (SELECT user_id FROM users WHERE email = ?)'
+        ).run(analysis.user_level || learnerLevel, JSON.stringify(topStrengths), JSON.stringify(topWeakAreas), JSON.stringify(topMistakes), session_id ? 0 : 1, now, session.email);
+      }
+
+      sessionMessages.push({ role: 'user', content: text });
+      sessionMessages.push({ role: 'assistant', content: reply });
+
+      if (currentSessionId) {
+        db.prepare('UPDATE tutor_sessions SET messages = ?, ended_at = ? WHERE session_id = ?').run(JSON.stringify(sessionMessages), now, currentSessionId);
+      } else {
+        const sessionResult = db.prepare(
+          'INSERT INTO tutor_sessions (user_id, messages, started_at, ended_at) VALUES ((SELECT user_id FROM users WHERE email = ?), ?, ?, ?)'
+        ).run(session.email, JSON.stringify(sessionMessages), now, now);
+        currentSessionId = String(sessionResult.lastInsertRowid);
+      }
+
+      return send(res, 200, {
+        reply: reply,
+        session_id: currentSessionId,
+        transcription: transcription,
+        pronunciation: pronunciation,
+        analysis: analysis,
+      });
+    }
+
     send(res, 404, { error: 'Not found' });
   } catch (error) {
     console.error('Server error:', error);
@@ -820,10 +1050,18 @@ Make sure all Bisaya phrases are easy to say out loud! Keep the tone warm and su
   }
 }
 
-async function start() {
-  await initDatabase();
-  pool = mysql.createPool({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: DB_NAME, waitForConnections: true, connectionLimit: 10 });
-  console.log('MySQL pool connected');
+function start() {
+  db = initSqlite();
+  initDatabase();
+  console.log('SQLite database connected');
+
+  initMysql().then(pool => {
+    mysql = pool;
+    if (pool) {
+      initMysqlSchema(pool).catch(err => console.warn('MySQL schema init warning:', err.message));
+    }
+  });
+
   const server = http.createServer((req, res) => {
     handleRequest(req, res).catch(err => {
       console.error('Unhandled server error:', err);

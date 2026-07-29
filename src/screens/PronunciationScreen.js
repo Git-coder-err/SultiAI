@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-audio';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { api } from '../services/api';
 import { colors } from '../theme/colors';
 
@@ -36,7 +36,8 @@ export default function PronunciationScreen() {
       const uri = recording.getURI();
       setRecording(null);
 
-      const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const audioFile = new File(uri);
+      const audioBase64 = await audioFile.base64();
       const data = await api.transcribe(audioBase64);
       const pronunciation = await api.checkPronunciation(data.text || '');
 

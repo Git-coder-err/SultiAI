@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, Alert, ActivityIndicator,
+  Platform, ScrollView, Alert, ActivityIndicator, Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
-import { colors } from '../theme/colors';
+import { spacing, borderRadius, typography, shadows } from '../theme';
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }) {
   const { signIn, signUp } = useUser();
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
@@ -18,7 +18,9 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async () => {
+    Keyboard.dismiss();
     if (!email || !password) return Alert.alert('Error', 'Email and password are required');
+    if (isSignUp && !name) return Alert.alert('Error', 'Name is required');
     setLoading(true);
     try {
       if (isSignUp) {
@@ -27,57 +29,101 @@ export default function LoginScreen() {
         await signIn(email, password);
       }
     } catch (err) {
-      Alert.alert('Error', err.message);
+      Alert.alert('Error', err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
+  const gradientColors = ['#1E6F9F', '#155A7E'];
+
   return (
-    <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={styles.container}>
+    <LinearGradient colors={gradientColors} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inner}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <Ionicons name="language" size={48} color={colors.white} />
-            <Text style={styles.title}>SultiAI</Text>
-            <Text style={styles.subtitle}>Learn Bisaya with AI</Text>
+            <View style={styles.logoContainer}>
+              <Ionicons name="language" size={40} color="#fff" />
+            </View>
+            <Text style={styles.brandName}>SultiAI</Text>
+            <Text style={styles.tagline}>Learn Bisaya with AI</Text>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{isSignUp ? 'Create Account' : 'Welcome Back'}</Text>
+            <Text style={styles.cardSubtitle}>
+              {isSignUp ? 'Start your Bisaya learning journey' : 'Continue your language adventure'}
+            </Text>
 
             {isSignUp && (
               <View style={styles.inputGroup}>
-                <Ionicons name="person-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor={colors.textLight} value={name} onChangeText={setName} />
+                <Ionicons name="person-outline" size={20} color={isSignUp ? '#6B7280' : '#9CA3AF'} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  placeholderTextColor="#9CA3AF"
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                />
               </View>
             )}
 
             <View style={styles.inputGroup}>
-              <Ionicons name="mail-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-              <TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.textLight} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#9CA3AF"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
 
             <View style={styles.inputGroup}>
-              <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-              <TextInput style={styles.input} placeholder="Password" placeholderTextColor={colors.textLight} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textSecondary} />
+              <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#9CA3AF"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
+            {!isSignUp && (
+              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotRow}>
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleSubmit} disabled={loading}>
               {loading ? (
-                <ActivityIndicator color={colors.white} />
+                <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
+                <LinearGradient colors={['#1E6F9F', '#155A7E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.gradient}>
+                  <Text style={styles.buttonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
+                </LinearGradient>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)} style={styles.toggle}>
+            <View style={styles.dividerRow}>
+              <View style={[styles.divider, { backgroundColor: '#E5E7EB' }]} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={[styles.divider, { backgroundColor: '#E5E7EB' }]} />
+            </View>
+
+            <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)} style={styles.toggleBtn}>
               <Text style={styles.toggleText}>
-                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
               </Text>
+              <Text style={styles.toggleAction}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -91,15 +137,26 @@ const styles = StyleSheet.create({
   inner: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   header: { alignItems: 'center', marginBottom: 32 },
-  title: { fontSize: 36, fontWeight: 'bold', color: colors.white, marginTop: 8 },
-  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  card: { backgroundColor: colors.white, borderRadius: 20, padding: 24, elevation: 8 },
-  cardTitle: { fontSize: 22, fontWeight: 'bold', color: colors.text, marginBottom: 20, textAlign: 'center' },
-  inputGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 12, paddingHorizontal: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  inputIcon: { marginRight: 8 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: colors.text },
-  button: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  buttonText: { color: colors.white, fontSize: 18, fontWeight: 'bold' },
-  toggle: { marginTop: 16, alignItems: 'center' },
-  toggleText: { color: colors.primary, fontSize: 14 },
+  logoContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  brandName: { fontSize: 36, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  tagline: { fontSize: 15, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  card: { backgroundColor: '#fff', borderRadius: 24, padding: 24, ...shadows.xl },
+  cardTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A2E', textAlign: 'center' },
+  cardSubtitle: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 4, marginBottom: 24 },
+  inputGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7F9FB', borderRadius: 14, paddingHorizontal: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#E5E7EB' },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, paddingVertical: 14, fontSize: 15, color: '#1A1A2E' },
+  eyeBtn: { padding: 4 },
+  forgotRow: { alignItems: 'flex-end', marginBottom: 8 },
+  forgotText: { color: '#1E6F9F', fontSize: 13, fontWeight: '600' },
+  button: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
+  buttonDisabled: { opacity: 0.6 },
+  gradient: { paddingVertical: 16, alignItems: 'center' },
+  buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  divider: { flex: 1, height: 1 },
+  dividerText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 13, fontWeight: '500' },
+  toggleBtn: { flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  toggleText: { color: '#6B7280', fontSize: 14 },
+  toggleAction: { color: '#1E6F9F', fontSize: 14, fontWeight: '700' },
 });

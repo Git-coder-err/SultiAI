@@ -2,69 +2,74 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { useUser } from '../context/UserContext';
-import { View, ActivityIndicator } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
+import LoadingState from '../components/LoadingState';
+import FloatingTabBar from '../components/FloatingTabBar';
+import { spacing } from '../theme';
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
+import HoyTutorScreen from '../screens/HoyTutorScreen';
 import ConversationScreen from '../screens/ConversationScreen';
-import AIChatScreen from '../screens/AIChatScreen';
-import PronunciationScreen from '../screens/PronunciationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import PronunciationScreen from '../screens/PronunciationScreen';
+import FlashcardsScreen from '../screens/FlashcardsScreen';
+import VocabularyReviewScreen from '../screens/VocabularyReviewScreen';
+import AchievementsScreen from '../screens/AchievementsScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
+import CommunityScreen from '../screens/CommunityScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ARSceneScreen from '../screens/ARSceneScreen';
+import VoiceModeScreen from '../screens/VoiceModeScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function LoadingScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-      <ActivityIndicator size="large" color={colors.primary} />
-    </View>
-  );
-}
-
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Conversation') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-          else if (route.name === 'AIChat') iconName = focused ? 'sparkles' : 'sparkles-outline';
-          else if (route.name === 'Pronunciation') iconName = focused ? 'mic' : 'mic-outline';
-          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textLight,
-        tabBarStyle: { paddingBottom: 4, height: 60 },
-      })}
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Conversation" component={ConversationScreen} />
-      <Tab.Screen name="AIChat" component={AIChatScreen} options={{ title: 'AI Tutor' }} />
-      <Tab.Screen name="Pronunciation" component={PronunciationScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Home' }} />
+      <Tab.Screen name="Practice" component={ConversationScreen} options={{ tabBarLabel: 'Practice' }} />
+      <Tab.Screen name="Learn" component={HoyTutorScreen} options={{ tabBarLabel: 'Tutor' }} />
+      <Tab.Screen name="Community" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }
 
 export default function AppNavigator() {
   const { user, loading } = useUser();
+  const { colors } = useTheme();
 
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingState fullScreen message="Loading SultiAI..." />;
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         {user ? (
-          <Stack.Screen name="Main" component={MainTabs} />
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="Pronunciation" component={PronunciationScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Flashcards" component={FlashcardsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="VocabularyReview" component={VocabularyReviewScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Achievements" component={AchievementsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ARScene" component={ARSceneScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="VoiceMode" component={VoiceModeScreen} options={{ presentation: 'modal', animation: 'fade' }} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: 'slide_from_right' }} />
+          </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: 'slide_from_right' }} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
