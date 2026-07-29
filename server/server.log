@@ -1,0 +1,6 @@
+SQLite connected: C:\Users\junju\OneDrive\Desktop\SulTi-AI\SultiAI\server\sultiai.db
+Database initialized
+SQLite database connected
+Server running on http://localhost:3001
+MySQL connection failed: 
+Server will continue with SQLite only

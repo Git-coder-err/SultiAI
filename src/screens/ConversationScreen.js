@@ -1,68 +1,123 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
+import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
-import { colors } from '../theme/colors';
+import Card from '../components/Card';
+import Badge from '../components/Badge';
+import { spacing, borderRadius, shadows } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function ConversationScreen() {
+const SUGGESTIONS = [
+  { label: 'At the Market', icon: 'cart', prompt: 'Buying food at a public market in Cebu' },
+  { label: 'Ordering Food', icon: 'restaurant', prompt: 'Ordering at a restaurant' },
+  { label: 'Greetings', icon: 'hand-left', prompt: 'Greeting someone for the first time' },
+  { label: 'Directions', icon: 'compass', prompt: 'Asking for directions around Cebu City' },
+  { label: 'Jeepney', icon: 'bus', prompt: 'Riding a jeepney and paying the fare' },
+  { label: 'Emergency', icon: 'warning', prompt: 'Emergency situation phrases' },
+];
+
+export default function ConversationScreen({ navigation }) {
   const { user } = useUser();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [situation, setSituation] = useState('');
   const [phrases, setPhrases] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const getPhrases = async () => {
-    if (!situation.trim()) return;
+  const getPhrases = async (prompt) => {
+    const query = prompt || situation.trim();
+    if (!query) return;
     setLoading(true);
+    setError(null);
     try {
-      const data = await api.recommendPhrases(situation, user?.target_language || 'Bisaya');
+      const data = await api.recommendPhrases(query, user?.target_language || 'Bisaya');
       setPhrases(data.phrases || []);
     } catch (err) {
-      setPhrases([`Error: ${err.message}`]);
+      setError(err.message);
+      setPhrases([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSuggestion = (prompt) => {
+    setSituation(prompt);
+    getPhrases(prompt);
+  };
+
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Conversation Practice</Text>
-        <Text style={styles.subtitle}>Describe a situation to get useful phrases</Text>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 12 }]}>
+        <Text style={styles.title}>Practice</Text>
+        <Text style={styles.subtitle}>Get useful Bisaya phrases for any situation</Text>
       </View>
 
       <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. At the market, ordering food..."
-          placeholderTextColor={colors.textLight}
-          value={situation}
-          onChangeText={setSituation}
-          onSubmitEditing={getPhrases}
-        />
-        <TouchableOpacity style={styles.sendBtn} onPress={getPhrases} disabled={loading}>
-          <Ionicons name={loading ? 'hourglass' : 'send'} size={20} color={colors.white} />
-        </TouchableOpacity>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            placeholder="Describe a situation..."
+            placeholderTextColor={colors.textLight}
+            value={situation}
+            onChangeText={setSituation}
+            onSubmitEditing={() => getPhrases()}
+          />
+          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.primary }]} onPress={() => getPhrases()} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={18} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.suggestionsRow}>
+        {SUGGESTIONS.map((s) => (
+          <TouchableOpacity key={s.label} style={[styles.chip, { backgroundColor: colors.primaryLight, borderColor: colors.primary + '30' }]} onPress={() => handleSuggestion(s.prompt)}>
+            <Ionicons name={s.icon} size={14} color={colors.primary} />
+            <Text style={[styles.chipText, { color: colors.primary }]}>{s.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <FlatList
         data={phrases}
         keyExtractor={(_, i) => i.toString()}
         renderItem={({ item, index }) => (
-          <View style={styles.phraseCard}>
-            <Text style={styles.phraseNumber}>{index + 1}</Text>
-            <Text style={styles.phraseText}>{item}</Text>
-          </View>
+          <Card style={styles.phraseCard} variant="outlined">
+            <View style={[styles.phraseNumber, { backgroundColor: colors.primary }]}>
+              <Text style={styles.phraseNumberText}>{index + 1}</Text>
+            </View>
+            <Text style={[styles.phraseText, { color: colors.text }]}>{item}</Text>
+          </Card>
         )}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={phrases.length > 0 && (
+          <Text style={[styles.resultTitle, { color: colors.text }]}>
+            Phrases for "{situation}"
+          </Text>
+        )}
         ListEmptyComponent={
           !loading && (
             <View style={styles.empty}>
-              <Ionicons name="chatbubbles-outline" size={48} color={colors.textLight} />
-              <Text style={styles.emptyText}>Enter a situation to practice</Text>
+              <View style={[styles.emptyIcon, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="chatbubbles-outline" size={40} color={colors.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Practice Conversations</Text>
+              <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
+                Describe a real-life situation or tap a suggestion above to get relevant Bisaya phrases.
+              </Text>
             </View>
+          )
+        }
+        ListFooterComponent={
+          error && (
+            <Card variant="outlined" style={{ borderLeftColor: '#EF4444', borderLeftWidth: 3 }}>
+              <Text style={{ color: '#EF4444', fontWeight: '600' }}>{error}</Text>
+            </Card>
           )
         }
       />
@@ -71,17 +126,25 @@ export default function ConversationScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: colors.primary },
-  title: { fontSize: 22, fontWeight: 'bold', color: colors.white },
-  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  inputRow: { flexDirection: 'row', padding: 16, alignItems: 'center' },
-  input: { flex: 1, backgroundColor: colors.white, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
-  sendBtn: { backgroundColor: colors.primary, width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-  list: { padding: 16 },
-  phraseCard: { flexDirection: 'row', backgroundColor: colors.white, borderRadius: 12, padding: 16, marginBottom: 10, elevation: 1, alignItems: 'flex-start' },
-  phraseNumber: { backgroundColor: colors.primary, color: colors.white, fontWeight: 'bold', width: 28, height: 28, borderRadius: 14, textAlign: 'center', lineHeight: 28, overflow: 'hidden', marginRight: 12 },
-  phraseText: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 22 },
-  empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: colors.textSecondary, marginTop: 12, fontSize: 14 },
+  container: { flex: 1 },
+  header: { paddingBottom: spacing.lg, paddingHorizontal: spacing.xl },
+  title: { fontSize: 26, fontWeight: '800', color: '#fff' },
+  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
+  inputRow: { padding: spacing.xl, paddingBottom: spacing.sm },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.lg, borderWidth: 1.5, paddingLeft: spacing.lg, ...shadows.sm },
+  input: { flex: 1, paddingVertical: 14, fontSize: 15 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', margin: 4 },
+  suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.lg },
+  chip: { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, gap: spacing.xs, borderWidth: 1 },
+  chipText: { fontSize: 12, fontWeight: '600' },
+  list: { padding: spacing.xl, paddingTop: 0 },
+  resultTitle: { fontSize: 16, fontWeight: '700', marginBottom: spacing.md },
+  phraseCard: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
+  phraseNumber: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md, marginTop: 2 },
+  phraseNumberText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  phraseText: { flex: 1, fontSize: 15, lineHeight: 22 },
+  empty: { alignItems: 'center', paddingTop: 40, paddingHorizontal: spacing.xl },
+  emptyIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xl },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.sm },
+  emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
