@@ -155,7 +155,16 @@ export const gradients = {
   purpleToCyan: ['#8B5CF6', '#06B6D4'],
   sunset: ['#F59E0B', '#EF4444'],
   ocean: ['#14B8A6', '#06B6D4'],
-  aurora: ['rgba(20,184,166,0.3)', 'rgba(37,99,235,0.2)', 'rgba(139,92,246,0.15)'],
+  aurora: ['rgba(20,184,166,0.3)', 'rgba(37,99,235,0.2)'],
+};
+
+export const animation = {
+  spring: { stiffness: 200, damping: 15, mass: 1 },
+  springLight: { stiffness: 120, damping: 12, mass: 0.8 },
+  springBouncy: { stiffness: 250, damping: 10, mass: 0.7 },
+  timing: { duration: 300, easing: 'easeInOut' },
+  timingSlow: { duration: 600, easing: 'easeInOut' },
+  timingFast: { duration: 150, easing: 'easeOut' },
 };
 
 export const glassStyles = {

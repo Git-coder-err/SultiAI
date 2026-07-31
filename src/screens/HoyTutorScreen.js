@@ -99,6 +99,36 @@ function TypingDots() {
   );
 }
 
+function AnimatedWaveform() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <WaveformBar key={i} index={i} />
+      ))}
+    </View>
+  );
+}
+
+function WaveformBar({ index }) {
+  const height = useSharedValue(8);
+
+  useEffect(() => {
+    height.value = withRepeat(
+      withSequence(
+        withTiming(6 + (index * 3) % 12 + 4, { duration: 300 + index * 40 }),
+        withTiming(6, { duration: 300 + index * 40 }),
+      ),
+      -1, true
+    );
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    width: 3, height: height.value, borderRadius: 1.5, backgroundColor: '#fff', opacity: 0.8,
+  }));
+
+  return <Animated.View style={style} />;
+}
+
 export default function HoyTutorScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const { addXp, hearts } = useGame();
@@ -107,7 +137,7 @@ export default function HoyTutorScreen({ navigation }) {
 
   const [messages, setMessages] = useState([{
     id: '0', role: 'assistant',
-    text: `Kumusta! I'm **Hoy!**, your Bisaya language companion.\n\nTap a topic below to start learning, or type/speak anything!`,
+    text: `Kumusta! I'm Hoy!, your Bisaya language companion.\n\nTap a topic below to start learning, or type/speak anything!`,
     quickActions: true,
   }]);
   const [input, setInput] = useState('');
@@ -298,7 +328,7 @@ export default function HoyTutorScreen({ navigation }) {
             </View>
           )}
           <LinearGradient
-            colors={isUser ? [colors.primary, colors.primaryDark] : [colors.glassBg, colors.glassBg]}
+            colors={isUser ? [colors.primary, colors.primaryDark] : [colors.glassBg, colors.glassHighlight]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={[
               styles.bubble,
@@ -588,13 +618,7 @@ export default function HoyTutorScreen({ navigation }) {
                 ? `Listening ${String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:${String(recordingDuration % 60).padStart(2, '0')}`
                 : isSpeaking ? 'Hoy! is speaking...' : ''}
             </Text>
-            {recorderState.isRecording && (
-              <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
-                {[1, 2, 3, 4, 5].map(i => (
-                  <View key={i} style={{ width: 3, height: 10 + Math.random() * 10, borderRadius: 1.5, backgroundColor: '#fff', opacity: 0.8 }} />
-                ))}
-              </View>
-            )}
+            {recorderState.isRecording && <AnimatedWaveform />}
             {isSpeaking && (
               <TouchableOpacity onPress={() => { Speech.stop(); setIsSpeaking(false); }}>
                 <Text style={styles.statusActionText}>Skip</Text>

@@ -15,3 +15,5 @@ export { default as BottomSheet } from './BottomSheet';
 export { default as Toast } from './Toast';
 export { default as VoiceOrb } from './VoiceOrb';
 export { default as AIAvatar } from './AIAvatar';
+export { default as AuroraBackground } from './AuroraBackground';
+export { default as WordReveal } from './WordReveal';
