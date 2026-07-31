@@ -15,7 +15,7 @@ const slides = [
     color: '#1E6F9F',
   },
   {
-    id: '2', icon: 'chatbubbles', title: 'AI Tutor "Hoy!"',
+    id: '2', icon: 'chatbubbles', title: 'AI Tutor "Sulti"',
     description: 'Practice conversations with our AI tutor. Speak, listen, and get instant feedback.',
     color: '#FFB347',
   },

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   withSequence, withDelay, cancelAnimation, Easing,
@@ -52,7 +52,7 @@ function FluidTransition({ from, to, sharedVal }) {
   return null;
 }
 
-export default React.memo(function VoiceOrb({ state = 'idle', size = 280 }) {
+export default React.memo(function VoiceOrb({ state = 'idle', size = 280, onPress }) {
   const { colors } = useTheme();
 
   const pulse = useSharedValue(0.96);
@@ -171,47 +171,55 @@ export default React.memo(function VoiceOrb({ state = 'idle', size = 280 }) {
       accessibilityLabel={`Voice orb, currently ${state}`}
       accessibilityRole="image"
     >
-      <Animated.View style={[glowStyle, styles.glowBase, { backgroundColor: colors.primary + '40' }]} />
-      <Animated.View style={[ring3Style, styles.ring, { borderColor: colors.primary + '20' }]} />
-      <Animated.View style={[ring2Style, styles.ring, { borderColor: colors.primary + '40' }]} />
-      <Animated.View style={[ring1Style, styles.ring, { borderColor: colors.primary + '60' }]} />
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={[styles.touchableHitArea, { width: size, height: size, borderRadius: halfSize }]}
+        accessibilityLabel={state === 'idle' ? 'Tap to start speaking' : state === 'listening' ? 'Tap to finish recording' : state === 'speaking' ? 'Tap to stop speaking' : 'Processing'}
+        accessibilityRole="button"
+      >
+        <Animated.View pointerEvents="none" style={[glowStyle, styles.glowBase, { backgroundColor: colors.primary + '40' }]} />
+        <Animated.View pointerEvents="none" style={[ring3Style, styles.ring, { borderColor: colors.primary + '20' }]} />
+        <Animated.View pointerEvents="none" style={[ring2Style, styles.ring, { borderColor: colors.primary + '40' }]} />
+        <Animated.View pointerEvents="none" style={[ring1Style, styles.ring, { borderColor: colors.primary + '60' }]} />
 
-      {(state === 'speaking' || state === 'listening') && (
-        <WaveBars intensity={waveIntensity} size={size} halfSize={halfSize} color={colors.primary} />
-      )}
-
-      <Animated.View style={[styles.liquidContainer, { width: size, height: size, borderRadius: halfSize }, rotateStyle]}>
-        <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize, overflow: 'hidden' }]}>
-          <LiquidBlob size={size} color1={colors.orbGradient1 || colors.primary} color2={colors.orbGradient2 || colors.secondary} offsetIndex={0} halfSize={halfSize} />
-          <LiquidBlob size={size} color1={colors.orbGradient1 || colors.primary} color2={colors.accent || colors.secondary} offsetIndex={1} halfSize={halfSize} />
-          <LiquidBlob size={size} color1={colors.orbGradient2 || colors.secondary} color2={colors.orbGradient1 || colors.primary} offsetIndex={2} halfSize={halfSize} />
-        </View>
-        {Platform.OS !== 'web' ? (
-          <BlurView intensity={45} style={[StyleSheet.absoluteFill, { borderRadius: halfSize }]} tint="light" />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+        {(state === 'speaking' || state === 'listening') && (
+          <WaveBars intensity={waveIntensity} size={size} halfSize={halfSize} color={colors.primary} />
         )}
-      </Animated.View>
 
-      <Animated.View style={[styles.orbCore, orbStyle]}>
-        <LinearGradient
-          colors={[colors.orbGradient1 || colors.primary, colors.orbGradient2 || colors.secondary]}
-          start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: halfSize }]}
-        />
-        <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize }, styles.coreShine]}>
+        <Animated.View pointerEvents="none" style={[styles.liquidContainer, { width: size, height: size, borderRadius: halfSize }, rotateStyle]}>
+          <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize, overflow: 'hidden' }]}>
+            <LiquidBlob size={size} color1={colors.orbGradient1 || colors.primary} color2={colors.orbGradient2 || colors.secondary} offsetIndex={0} halfSize={halfSize} />
+            <LiquidBlob size={size} color1={colors.orbGradient1 || colors.primary} color2={colors.accent || colors.secondary} offsetIndex={1} halfSize={halfSize} />
+            <LiquidBlob size={size} color1={colors.orbGradient2 || colors.secondary} color2={colors.orbGradient1 || colors.primary} offsetIndex={2} halfSize={halfSize} />
+          </View>
+          {Platform.OS !== 'web' ? (
+            <BlurView intensity={45} style={[StyleSheet.absoluteFill, { borderRadius: halfSize }]} tint="light" />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+          )}
+        </Animated.View>
+
+        <Animated.View pointerEvents="none" style={[styles.orbCore, orbStyle]}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.35)', 'transparent']}
-            style={[StyleSheet.absoluteFill, { borderRadius: halfSize, top: 0, left: 0, right: 0, height: '50%' }]}
+            colors={[colors.orbGradient1 || colors.primary, colors.orbGradient2 || colors.secondary]}
+            start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: halfSize }]}
           />
-        </View>
-      </Animated.View>
+          <View style={[StyleSheet.absoluteFill, { borderRadius: halfSize }, styles.coreShine]}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.35)', 'transparent']}
+              style={[StyleSheet.absoluteFill, { borderRadius: halfSize, top: 0, left: 0, right: 0, height: '50%' }]}
+            />
+          </View>
+        </Animated.View>
 
-      <Particles halfSize={halfSize} color={colors.primary} />
+        <Particles halfSize={halfSize} color={colors.primary} />
 
-      {state === 'listening' && (
-        <Animated.View style={[listeningDotStyle, { width: size * 0.28, height: size * 0.28, borderRadius: size * 0.14, borderWidth: 2, borderColor: colors.primary + '80', position: 'absolute', backgroundColor: colors.primary + '30' }]} />
-      )}
+        {state === 'listening' && (
+          <Animated.View pointerEvents="none" style={[listeningDotStyle, { width: size * 0.28, height: size * 0.28, borderRadius: size * 0.14, borderWidth: 2, borderColor: colors.primary + '80', position: 'absolute', backgroundColor: colors.primary + '30' }]} />
+        )}
+      </TouchableOpacity>
     </View>
   );
 });
@@ -315,6 +323,9 @@ const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute', top: '50%', left: '50%',
     alignItems: 'center', justifyContent: 'center',
+  },
+  touchableHitArea: {
+    position: 'absolute', alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
   glowBase: { position: 'absolute' },
   ring: { position: 'absolute', borderWidth: 1.5 },

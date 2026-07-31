@@ -79,7 +79,8 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const quickActions = [
-    { label: 'Hoy Tutor', icon: 'sparkles', screen: 'Learn', gradient: ['#14B8A6', '#0D9488'] },
+    { label: 'Sulti Tutor', icon: 'sparkles', screen: 'Learn', gradient: ['#14B8A6', '#0D9488'] },
+    { label: 'Whisper AI', icon: 'language', screen: 'WhisperAI', gradient: ['#8B5CF6', '#6D28D9'] },
     { label: 'Practice', icon: 'chatbubbles', screen: 'Practice', gradient: ['#2563EB', '#1D4ED8'] },
     { label: 'Pronunciation', icon: 'mic', screen: 'Pronunciation', gradient: ['#8B5CF6', '#7C3AED'] },
     { label: 'AR Explore', icon: 'camera', screen: 'ARScene', gradient: ['#10B981', '#059669'] },
@@ -211,7 +212,7 @@ export default function DashboardScreen({ navigation }) {
                 ))}
                 <TouchableOpacity style={[styles.practiceBtn, { backgroundColor: colors.primary }]} onPress={() => navigation.navigate('Learn')}>
                   <Ionicons name="sparkles" size={14} color="#fff" />
-                  <Text style={styles.practiceBtnText}>Practice with Hoy</Text>
+                  <Text style={styles.practiceBtnText}>Practice with Sulti</Text>
                 </TouchableOpacity>
               </GlassCard>
             )}
@@ -282,7 +283,7 @@ export default function DashboardScreen({ navigation }) {
                 <GlassCard style={styles.emptyCard}>
                   <Ionicons name="book-outline" size={36} color={colors.textLight} />
                   <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No conversations yet</Text>
-                  <Text style={[styles.emptySubtext, { color: colors.textLight }]}>Start learning with Hoy!</Text>
+                  <Text style={[styles.emptySubtext, { color: colors.textLight }]}>Start learning with Sulti!</Text>
                 </GlassCard>
               ) : (
                 history.slice(0, 5).map((item, idx) => (

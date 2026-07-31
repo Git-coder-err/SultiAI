@@ -24,6 +24,7 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ARSceneScreen from '../screens/ARSceneScreen';
 import VoiceModeScreen from '../screens/VoiceModeScreen';
+import WhisperAIScreen from '../screens/WhisperAIScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -62,6 +63,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="ARScene" component={ARSceneScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="VoiceMode" component={VoiceModeScreen} options={{ presentation: 'modal', animation: 'fade' }} />
+            <Stack.Screen name="WhisperAI" component={WhisperAIScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (

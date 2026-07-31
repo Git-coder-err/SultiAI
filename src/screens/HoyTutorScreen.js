@@ -17,11 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '../context/GameContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
+import { sanitizeForSpeech } from '../utils/speech';
 import GlassCard from '../components/GlassCard';
 import Badge from '../components/Badge';
 import AIAvatar from '../components/AIAvatar';
 import AuroraBackground from '../components/AuroraBackground';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, getTabBarClearance } from '../theme';
 import useAdaptiveTutor from '../hooks/useAdaptiveTutor';
 
 const SITUATIONS = [
@@ -36,14 +37,14 @@ const SITUATIONS = [
 ];
 
 const ROLEPLAY_SITUATIONS = [
-  { label: 'Restaurant', emoji: '\u{1F37D}\uFE0F', prompt: 'Ordering food at a restaurant in Cebu' },
-  { label: 'Market', emoji: '\u{1F6D2}', prompt: 'Bargaining at the local market' },
-  { label: 'Jeepney', emoji: '\u{1F68C}', prompt: 'Riding the jeepney' },
-  { label: 'Hospital', emoji: '\u{1F3E5}', prompt: 'At the hospital' },
-  { label: 'Interview', emoji: '\u{1F4BC}', prompt: 'Job interview in Bisaya' },
-  { label: 'Friends', emoji: '\u{1F44B}', prompt: 'Meeting new friends' },
-  { label: 'Travel', emoji: '\u2708\uFE0F', prompt: 'Traveling around Cebu' },
-  { label: 'Emergency', emoji: '\u{1F6A8}', prompt: 'Emergency situation' },
+  { label: 'Restaurant', emoji: '\u{1F37D}\uFE0F', prompt: 'Ordering food at a restaurant in Cebu', character: 'Sulti is your waiter at a busy restaurant in Cebu. You want to order lechon and rice.' },
+  { label: 'Market', emoji: '\u{1F6D2}', prompt: 'Bargaining at the local market', character: 'Sulti is a market vendor at Carbon Market. You are bargaining for fresh mangoes.' },
+  { label: 'Jeepney', emoji: '\u{1F68C}', prompt: 'Riding the jeepney', character: 'Sulti is your jeepney driver. Tell him where you are getting off.' },
+  { label: 'Hospital', emoji: '\u{1F3E5}', prompt: 'At the hospital', character: 'Sulti is the receptionist at a hospital. You need to describe your symptoms.' },
+  { label: 'Interview', emoji: '\u{1F4BC}', prompt: 'Job interview in Bisaya', character: 'Sulti is the interviewer at a job interview. You are applying for a customer service job.' },
+  { label: 'Friends', emoji: '\u{1F44B}', prompt: 'Meeting new friends', character: 'Sulti is a friendly local you just met at a gathering in Cebu. Get to know each other.' },
+  { label: 'Travel', emoji: '\u2708\uFE0F', prompt: 'Traveling around Cebu', character: 'Sulti is a tour guide showing you around Cebu. Ask about places to visit.' },
+  { label: 'Emergency', emoji: '\u{1F6A8}', prompt: 'Emergency situation', character: 'Sulti is a 911 dispatcher. Describe the emergency clearly and calmly.' },
 ];
 
 function AnimatedMessage({ children, index }) {
@@ -137,7 +138,7 @@ export default function HoyTutorScreen({ navigation }) {
 
   const [messages, setMessages] = useState([{
     id: '0', role: 'assistant',
-    text: `Kumusta! I'm Hoy!, your Bisaya language companion.\n\nTap a topic below to start learning, or type/speak anything!`,
+    text: `Kumusta! I'm Sulti, your Bisaya language companion.\n\nTap a topic below to start learning, or type/speak anything!`,
     quickActions: true,
   }]);
   const [input, setInput] = useState('');
@@ -251,7 +252,7 @@ export default function HoyTutorScreen({ navigation }) {
   const speakReply = (text) => {
     if (!text) return;
     setIsSpeaking(true);
-    Speech.speak(text.replace(/\*\*(.*?)\*\*/g, '$1'), {
+    Speech.speak(sanitizeForSpeech(text), {
       language: 'ceb', rate: 0.85,
       onDone: () => { setIsSpeaking(false); if (continuousMode) setTimeout(() => startRecording(), 600); },
       onError: () => setIsSpeaking(false),
@@ -294,12 +295,14 @@ export default function HoyTutorScreen({ navigation }) {
     finally { setLoading(false); }
   };
 
-  const startRoleplay = async (prompt) => {
+  const startRoleplay = async (rp) => {
     setShowRoleplay(false);
     setLoading(true);
-    addMessage('user', `Let's roleplay: ${prompt}`);
+    const characterLine = rp.character ? ` (${rp.character})` : '';
+    addMessage('user', `Let's roleplay: ${rp.prompt}${characterLine}`);
+    const instruction = `Let's start a role-play scenario: ${rp.prompt}.${rp.character ? ' ' + rp.character : ''}\n\nAct as the local person in this situation and stay in character for the WHOLE role-play:\n- Open the conversation in Bisaya with an English translation.\n- Keep each line short and natural, like a real back-and-forth conversation.\n- Gently correct me in character if I make a mistake.\n- Do not break character or switch into teaching mode.\n- Start now with your opening line.`;
     try {
-      const data = await api.tutorChat(`Let's roleplay a scenario: ${prompt}. Start the conversation naturally.`, null, sessionId);
+      const data = await api.tutorChat(instruction, null, sessionId);
       if (data.session_id) setSessionId(data.session_id);
       addMessage('assistant', data.reply);
       addXp(15, 'roleplay');
@@ -324,7 +327,7 @@ export default function HoyTutorScreen({ navigation }) {
               <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.bubbleAvatar}>
                 <Ionicons name="sparkles" size={10} color="#fff" />
               </LinearGradient>
-              <Text style={[styles.bubbleSender, { color: colors.primary }]}>Hoy!</Text>
+              <Text style={[styles.bubbleSender, { color: colors.primary }]}>Sulti</Text>
             </View>
           )}
           <LinearGradient
@@ -366,7 +369,7 @@ export default function HoyTutorScreen({ navigation }) {
       <View style={styles.welcomeHeader}>
         <AIAvatar size={56} mood={adaptiveTutor.difficulty === 'advanced' ? 'happy' : 'neutral'} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.welcomeName, { color: colors.text }]}>Hoy!</Text>
+          <Text style={[styles.welcomeName, { color: colors.text }]}>Sulti!</Text>
           <Text style={[styles.welcomeTitle, { color: colors.textSecondary }]}>Your Bisaya Companion</Text>
           <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
             {level && (
@@ -384,6 +387,7 @@ export default function HoyTutorScreen({ navigation }) {
       </View>
       <Text style={[styles.welcomeText, { color: colors.textSecondary }]}>{msg.text}</Text>
       <Text style={[styles.promptLabel, { color: colors.textLight }]}>Choose a topic to practice</Text>
+      <Text style={[styles.sectionHint, { color: colors.textLight }]}>Tap a topic for key phrases and a mini-lesson</Text>
       <View style={styles.situationGrid}>
         {SITUATIONS.map((s) => (
           <TouchableOpacity
@@ -403,13 +407,14 @@ export default function HoyTutorScreen({ navigation }) {
         <Text style={[styles.roleplayText, { color: colors.primary }]}>Role-Play Scenarios</Text>
         <Ionicons name={showRoleplay ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primary} />
       </TouchableOpacity>
+      <Text style={[styles.sectionHint, { color: colors.textLight }]}>Sulti plays a local character — you act out the scene together</Text>
       {showRoleplay && (
         <View style={styles.roleplayGrid}>
           {ROLEPLAY_SITUATIONS.map((r) => (
             <TouchableOpacity
               key={r.label}
               style={[styles.roleplayChip, { backgroundColor: colors.primary + '15' }]}
-              onPress={() => startRoleplay(r.prompt)}
+              onPress={() => startRoleplay(r)}
               disabled={loading}
               activeOpacity={0.7}
             >
@@ -548,7 +553,7 @@ export default function HoyTutorScreen({ navigation }) {
         <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.bubbleAvatar}>
           <Ionicons name="sparkles" size={10} color="#fff" />
         </LinearGradient>
-        <Text style={[styles.bubbleSender, { color: colors.primary }]}>Hoy!</Text>
+        <Text style={[styles.bubbleSender, { color: colors.primary }]}>Sulti</Text>
       </View>
       <GlassCard padding="md" style={[styles.typingBubble, { borderColor: colors.glassBorder }]}>
         <TypingDots />
@@ -568,7 +573,7 @@ export default function HoyTutorScreen({ navigation }) {
           <View style={styles.headerLeft}>
             <AIAvatar size={36} mood={isSpeaking ? 'speaking' : loading ? 'thinking' : 'neutral'} />
             <View style={{ marginLeft: 8 }}>
-              <Text style={styles.headerTitle}>Hoy!</Text>
+              <Text style={styles.headerTitle}>Sulti</Text>
               <Text style={styles.headerSubtitle}>
                 {isSpeaking ? 'Speaking...' : loading ? 'Thinking...' : level?.level || 'Learning'}
               </Text>
@@ -609,14 +614,14 @@ export default function HoyTutorScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       />
 
-      <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.inputContainer, { borderTopColor: colors.glassBorder }]}>
+      <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.inputContainer, { borderTopColor: colors.glassBorder, paddingBottom: getTabBarClearance(insets) }]}>
         {(recorderState.isRecording || isSpeaking) && (
           <View style={[styles.statusBar, { backgroundColor: recorderState.isRecording ? '#EF4444' : colors.primary }]}>
             <Ionicons name={recorderState.isRecording ? 'mic' : 'volume-high'} size={14} color="#fff" />
             <Text style={styles.statusText}>
               {recorderState.isRecording
                 ? `Listening ${String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:${String(recordingDuration % 60).padStart(2, '0')}`
-                : isSpeaking ? 'Hoy! is speaking...' : ''}
+                : isSpeaking ? 'Sulti is speaking...' : ''}
             </Text>
             {recorderState.isRecording && <AnimatedWaveform />}
             {isSpeaking && (
@@ -699,6 +704,7 @@ const styles = StyleSheet.create({
   welcomeTitle: { fontSize: 13, marginTop: 1 },
   welcomeText: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
   promptLabel: { fontSize: 11, fontWeight: '700', marginBottom: spacing.sm, letterSpacing: 0.5, textTransform: 'uppercase' },
+  sectionHint: { fontSize: 11, marginBottom: spacing.sm, marginTop: -4, opacity: 0.8 },
   situationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   situationChip: { flexDirection: 'row', alignItems: 'center', borderRadius: 9999, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xs, borderWidth: 1 },
   chipLabel: { fontSize: 12, fontWeight: '700' },
