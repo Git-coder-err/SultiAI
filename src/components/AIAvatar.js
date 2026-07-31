@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
@@ -7,22 +7,32 @@ import Animated, {
 import Svg, { Circle, Path, Ellipse, G, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 
+let instanceCounter = 0;
+
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedG = Animated.createAnimatedComponent(G);
 
-export default function AIAvatar({ size = 80, mood = 'neutral' }) {
-  const { colors } = useTheme();
+export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
+  const { colors, isDark } = useTheme();
+  const instanceId = useRef(++instanceCounter);
+  const gradId = `avatarGrad_${instanceId.current}`;
+  const grad2Id = `avatarGrad2_${instanceId.current}`;
+
   const floatAnim = useSharedValue(0);
   const blinkAnim = useSharedValue(0);
   const mouthAnim = useSharedValue(0);
   const bounceAnim = useSharedValue(0);
   const scaleAnim = useSharedValue(1);
+  const browAnim = useSharedValue(0);
 
   const halfSize = size / 2;
   const eyeSize = size * 0.08;
   const eyeY = size * 0.32;
   const eyeSpacing = size * 0.15;
   const mouthY = size * 0.55;
+  const browY = size * 0.24;
+  const browW = size * 0.12;
+  const pupilColor = isDark ? '#ffffff' : '#1a1a2e';
 
   useEffect(() => {
     cancelAnimation(floatAnim);
@@ -30,21 +40,31 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
     cancelAnimation(mouthAnim);
     cancelAnimation(bounceAnim);
     cancelAnimation(scaleAnim);
+    cancelAnimation(browAnim);
 
     floatAnim.value = withRepeat(
       withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
       -1, true
     );
 
-    blinkAnim.value = withRepeat(withSequence(
-      withTiming(0, { duration: 5000 }),
-      withTiming(1, { duration: 100 }),
-      withTiming(0, { duration: 150 }),
-    ), -1, false);
+    const blinkInterval = () => {
+      blinkAnim.value = withRepeat(withSequence(
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 100 }),
+      ), 1, false);
+    };
+
+    setTimeout(blinkInterval, 4000);
+
+    setInterval(() => {
+      cancelAnimation(blinkAnim);
+      blinkAnim.value = withRepeat(withSequence(
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 100 }),
+      ), 1, false);
+    }, 5000);
 
     switch (mood) {
-      case 'neutral':
-        break;
       case 'happy':
         bounceAnim.value = withRepeat(withSequence(
           withSpring(1, { stiffness: 200, damping: 10 }),
@@ -55,8 +75,6 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
           withSpring(1, { stiffness: 200, damping: 10 }),
         );
         break;
-      case 'listening':
-        break;
       case 'speaking':
         mouthAnim.value = withRepeat(withSequence(
           withTiming(1, { duration: 200, easing: Easing.inOut(Easing.sin) }),
@@ -64,6 +82,12 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
         ), -1, true);
         break;
       case 'thinking':
+        browAnim.value = withRepeat(
+          withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+          -1, true
+        );
+        break;
+      case 'listening':
         break;
       case 'celebrating':
         bounceAnim.value = withRepeat(withSequence(
@@ -75,12 +99,17 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
           withSpring(1, { stiffness: 150, damping: 8 }),
         );
         break;
+      default:
+        break;
     }
 
     return () => {
       cancelAnimation(floatAnim);
       cancelAnimation(blinkAnim);
       cancelAnimation(mouthAnim);
+      cancelAnimation(bounceAnim);
+      cancelAnimation(scaleAnim);
+      cancelAnimation(browAnim);
     };
   }, [mood]);
 
@@ -91,19 +120,27 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
     ],
   }));
 
-  const leftEyeStyle = useAnimatedStyle(() => {
-    const isBlinking = blinkAnim.value > 0.5;
+  const leftEyeStyle = useAnimatedStyle(() => ({
+    opacity: blinkAnim.value > 0.5 ? 0 : 1,
+    transform: [{ scaleY: blinkAnim.value > 0.5 ? 0.01 : 1 }],
+  }));
+
+  const rightEyeStyle = useAnimatedStyle(() => ({
+    opacity: blinkAnim.value > 0.5 ? 0 : 1,
+    transform: [{ scaleY: blinkAnim.value > 0.5 ? 0.01 : 1 }],
+  }));
+
+  const leftBrowStyle = useAnimatedStyle(() => {
+    const tilt = mood === 'thinking' ? browAnim.value * (-4) : mood === 'speaking' ? 0 : 0;
     return {
-      opacity: isBlinking ? 0 : 1,
-      transform: [{ scaleY: isBlinking ? 0.01 : 1 }],
+      transform: [{ translateY: tilt }],
     };
   });
 
-  const rightEyeStyle = useAnimatedStyle(() => {
-    const isBlinking = blinkAnim.value > 0.5;
+  const rightBrowStyle = useAnimatedStyle(() => {
+    const tilt = mood === 'thinking' ? browAnim.value * 4 : mood === 'speaking' ? 0 : 0;
     return {
-      opacity: isBlinking ? 0 : 1,
-      transform: [{ scaleY: isBlinking ? 0.01 : 1 }],
+      transform: [{ translateY: tilt }],
     };
   });
 
@@ -133,24 +170,27 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
   };
 
   return (
-    <Animated.View style={[styles.container, { width: size, height: size }, containerStyle]}>
+    <Animated.View
+      style={[styles.container, { width: size, height: size, shadowColor: colors.primary }, containerStyle]}
+      accessibilityLabel={`Hoy avatar, mood is ${mood}`}
+      accessibilityRole="image"
+    >
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Defs>
-          <SvgGradient id="avatarGrad" x1="0" y1="0" x2="1" y2="1">
+          <SvgGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={colors.primary} stopOpacity="1" />
             <Stop offset="1" stopColor={colors.secondary} stopOpacity="1" />
           </SvgGradient>
-          <SvgGradient id="avatarGrad2" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={colors.primaryLight} stopOpacity="0.3" />
+          <SvgGradient id={grad2Id} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={colors.primaryLight || colors.primary} stopOpacity="0.3" />
             <Stop offset="1" stopColor="transparent" stopOpacity="0" />
           </SvgGradient>
         </Defs>
 
-        <Circle cx={halfSize} cy={halfSize} r={halfSize - 2} fill="url(#avatarGrad)" />
+        <Circle cx={halfSize} cy={halfSize} r={halfSize - 2} fill={`url(#${gradId})`} />
+        <Circle cx={halfSize} cy={halfSize} r={halfSize * 0.4} fill={`url(#${grad2Id})`} />
 
-        <Circle cx={halfSize} cy={halfSize} r={halfSize * 0.4} fill="url(#avatarGrad2)" />
-
-        <G opacity={0.15}>
+        <G opacity={0.12}>
           <Circle cx={halfSize} cy={halfSize} r={halfSize * 0.3} fill="transparent" stroke={colors.primary + '40'} strokeWidth="0.5" />
         </G>
 
@@ -159,14 +199,33 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
           <Ellipse cx={halfSize + eyeSpacing + 3} cy={mouthY - 2} rx={size * 0.07} ry={size * 0.035} fill={colors.primary + '50'} />
         </G>
 
+        <AnimatedG style={leftBrowStyle}>
+          <Path
+            d={`M${halfSize - eyeSpacing - browW},${browY} Q${halfSize - eyeSpacing},${browY - 3} ${halfSize - eyeSpacing + browW},${browY}`}
+            fill="none"
+            stroke={pupilColor}
+            strokeWidth={size * 0.02}
+            strokeLinecap="round"
+          />
+        </AnimatedG>
+        <AnimatedG style={rightBrowStyle}>
+          <Path
+            d={`M${halfSize + eyeSpacing - browW},${browY} Q${halfSize + eyeSpacing},${browY - 3} ${halfSize + eyeSpacing + browW},${browY}`}
+            fill="none"
+            stroke={pupilColor}
+            strokeWidth={size * 0.02}
+            strokeLinecap="round"
+          />
+        </AnimatedG>
+
         <AnimatedG>
           <AnimatedCircle cx={halfSize - eyeSpacing} cy={eyeY} r={eyeSize} fill="white" style={leftEyeStyle} />
-          <Circle cx={halfSize - eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill="#1a1a2e" />
+          <Circle cx={halfSize - eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill={pupilColor} />
         </AnimatedG>
 
         <AnimatedG>
           <AnimatedCircle cx={halfSize + eyeSpacing} cy={eyeY} r={eyeSize} fill="white" style={rightEyeStyle} />
-          <Circle cx={halfSize + eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill="#1a1a2e" />
+          <Circle cx={halfSize + eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill={pupilColor} />
         </AnimatedG>
 
         <Path
@@ -179,13 +238,12 @@ export default function AIAvatar({ size = 80, mood = 'neutral' }) {
       </Svg>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#14B8A6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
