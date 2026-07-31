@@ -172,7 +172,7 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
   return (
     <Animated.View
       style={[styles.container, { width: size, height: size, shadowColor: colors.primary }, containerStyle]}
-      accessibilityLabel={`Hoy avatar, mood is ${mood}`}
+      accessibilityLabel={`Sulti avatar, mood is ${mood}`}
       accessibilityRole="image"
     >
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>

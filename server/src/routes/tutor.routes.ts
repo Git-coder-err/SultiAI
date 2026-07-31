@@ -5,6 +5,7 @@ import { getSessionMessages, createSession, updateSession } from '../db/reposito
 import { getUserIdByEmail } from '../db/repositories/conversation.repo';
 import { getLivingLexicon } from '../db/repositories/preservation.repo';
 import { isGroqConfigured, groqChat, groqTranscribeAudio, groqJson } from '../utils/groq';
+import { buildSultiPrompt } from '../utils/prompts';
 
 const router = Router();
 
@@ -151,7 +152,9 @@ router.post('/chat', authMiddleware, async (req: Request, res: Response) => {
       }
     } catch {}
 
-    const systemPrompt = 'You are "Hoy!", an enthusiastic and patient AI Bisaya (Cebuano) language tutor!\n\nThis learner is at: ' + learnerLevel + ' level.\n' + mistakesContext + '\n' + weakAreaContext + '\n\nTeaching approach for their level:\n' + (levelInstructions[learnerLevel] || levelInstructions.beginner) + '\n\nYour Mission:\n- Help users learn and practice SPEAKING Bisaya (Cebuano)\n- Make responses clear and easy to pronounce\n- Focus on practical, everyday phrases\n\nTeaching Style:\n- Friendly, conversational, and encouraging\n- Use emojis to make learning fun\n- Keep explanations simple\n- Keep sentences short and speakable\n\nYour Expertise:\n- Teach Bisaya/Cebuano to English speakers\n- Show formal vs everyday Bisaya (slang & casual)\n- Share cultural context and usage tips\n- Write Bisaya phrases in quotation marks like "Maayong buntag"\n- Give pronunciation guides in simple terms\n- Always include English translations\n' + lexiconContext + '\nAfter your teaching reply, append a JSON analysis block on its own line like this:\n__ANALYSIS__{"detected_mistakes":[{"pattern":"wrong","correction":"right","count":1}],"topics":["topic1"],"user_level":"' + learnerLevel + '"}__END__';
+    const learnerContext = 'This learner is at: ' + learnerLevel + ' level.\n' + mistakesContext + '\n' + weakAreaContext + '\n\nTeaching approach for their level:\n' + (levelInstructions[learnerLevel] || levelInstructions.beginner) + lexiconContext + '\nAfter your teaching reply, append a JSON analysis block on its own line like this:\n__ANALYSIS__{"detected_mistakes":[{"pattern":"wrong","correction":"right","count":1}],"topics":["topic1"],"user_level":"' + learnerLevel + '"}__END__';
+
+    const systemPrompt = buildSultiPrompt(audio ? 'voice' : 'chat', learnerContext);
 
     const reply = await groqChat([
       { role: 'system', content: systemPrompt },

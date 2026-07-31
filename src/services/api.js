@@ -144,6 +144,15 @@ export const api = {
   getWeeklyProgress: () => request('GET', '/api/analytics/weekly'),
   getStreakData: () => request('GET', '/api/analytics/streak'),
 
+  // Whisper AI (Philippine Dialects)
+  whisperChat: (message, language) =>
+    request('POST', '/api/whisper/chat', { message, language }),
+  whisperVoice: (audio, language) =>
+    request('POST', '/api/whisper/voice', { audio, language }),
+  whisperPhrases: (topic, language) =>
+    request('POST', '/api/whisper/phrases', { topic, language }),
+  whisperLanguages: () => request('GET', '/api/whisper/languages'),
+
   // AR Scenarios
   getARScenarios: () => request('GET', '/api/ar/scenarios'),
   getARScenario: (id) => request('GET', `/api/ar/scenarios/${id}`),

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { connect, closeAll } from './db/connection';
@@ -21,8 +22,10 @@ import challengeRoutes from './routes/challenge.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import preservationRoutes from './routes/preservation.routes';
 import arRoutes from './routes/ar.routes';
+import whisperRoutes from './routes/whisper.routes';
 import { authMiddleware } from './middleware/auth';
 import { isGroqConfigured, groqChat } from './utils/groq';
+import { buildSultiPrompt } from './utils/prompts';
 import { getUserIdByEmail } from './db/repositories/conversation.repo';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -54,6 +57,7 @@ app.use('/api/challenges', challengeRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/preservation', preservationRoutes);
 app.use('/api/ar', arRoutes);
+app.use('/api/whisper', whisperRoutes);
 
 app.post('/api/assistant/chat', authMiddleware, async (req, res) => {
   try {
@@ -67,7 +71,7 @@ app.post('/api/assistant/chat', authMiddleware, async (req, res) => {
       return;
     }
     const reply = await groqChat([
-      { role: 'system', content: `You are "Hoy!", an enthusiastic and patient AI Bisaya (Cebuano) language tutor!\n\nYour Mission:\n- Help users learn and practice SPEAKING Bisaya (Cebuano)\n- Make responses clear and easy to pronounce\n- Focus on practical, everyday phrases\n\nTeaching Style:\n- Friendly, conversational, and encouraging\n- Use emojis to make learning fun\n- Keep explanations simple\n\nYour Expertise:\n- Teach Bisaya/Cebuano to English speakers\n- Show formal vs everyday Bisaya (slang & casual)\n- Share cultural context and usage tips\n- Write Bisaya phrases in quotation marks like "Maayong buntag"\n- Give pronunciation guides in simple terms\n- Keep sentences short and speakable\n- Always include English translations\n\nMake sure all Bisaya phrases are easy to say out loud! Keep the tone warm and supportive.` },
+      { role: 'system', content: buildSultiPrompt('chat') },
       { role: 'user', content: message },
     ], { temperature: 0.9, maxTokens: 800 });
     res.json({ reply });
@@ -88,7 +92,7 @@ app.post('/api/groq', authMiddleware, async (req, res) => {
       res.status(400).json({ error: 'Messages must be a non-empty array' });
       return;
     }
-    const systemPrompt = `You are "Hoy!", an enthusiastic AI Bisaya language tutor. Your role:\n- Teach Bisaya (Cebuano) language to ${nativeLanguage || 'English'} speakers\n- Compare formal Bisaya vs everyday Bisaya slang\n- Provide cultural context and usage tips\n- Keep responses friendly, encouraging, and practical\n- Include example sentences with translations\n- When explaining pronunciation, use simple phonetics\n- Keep responses under 200 words unless asked for more detail\n- If asked about topics outside language learning, gently redirect to Bisaya learning\n\nStart each response with a brief, warm acknowledgment of the user's question.`;
+    const systemPrompt = buildSultiPrompt('chat', `The learner's native language is ${nativeLanguage || 'English'}.`);
     const reply = await groqChat([
       { role: 'system', content: systemPrompt },
       ...messages.map((m: any) => ({ role: m.type === 'user' ? 'user' as const : 'assistant' as const, content: m.text })),

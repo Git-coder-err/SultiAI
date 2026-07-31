@@ -7,8 +7,8 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  withRepeat, withSequence, cancelAnimation, Easing,
+  useSharedValue, useAnimatedStyle, withTiming,
+  withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -19,6 +19,7 @@ import WordReveal from '../components/WordReveal';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
+import { sanitizeForSpeech } from '../utils/speech';
 
 const ORB_SIZE = 280;
 
@@ -28,7 +29,6 @@ export default function VoiceModeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
   const [orbState, setOrbState] = useState('idle');
-  const [statusText, setStatusText] = useState('Tap to speak');
   const [transcript, setTranscript] = useState('');
   const [aiReply, setAiReply] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -46,15 +46,11 @@ export default function VoiceModeScreen({ navigation }) {
   const listRef = useRef(null);
   const isSpeakingRef = useRef(false);
 
-  const orbScale = useSharedValue(0.8);
   const contentOpacity = useSharedValue(0);
   const transcriptOpacity = useSharedValue(0);
   const replyOpacity = useSharedValue(0);
-  const micPulse = useSharedValue(1);
-  const voiceLevelAnim = useSharedValue(0);
 
   useEffect(() => {
-    orbScale.value = withSpring(1, { stiffness: 120, damping: 15 });
     contentOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.sin) });
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
@@ -62,25 +58,6 @@ export default function VoiceModeScreen({ navigation }) {
       Speech.stop();
     };
   }, []);
-
-  useEffect(() => {
-    cancelAnimation(micPulse);
-    if (isRecording) {
-      micPulse.value = withRepeat(
-        withSequence(
-          withTiming(1.08, { duration: 400, easing: Easing.inOut(Easing.sin) }),
-          withTiming(0.92, { duration: 400, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1, true
-      );
-    } else {
-      micPulse.value = withTiming(1, { duration: 300 });
-    }
-  }, [isRecording]);
-
-  const orbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: orbScale.value }],
-  }));
 
   const contentAnimatedStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
@@ -94,20 +71,6 @@ export default function VoiceModeScreen({ navigation }) {
     opacity: replyOpacity.value,
   }));
 
-  const micButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: micPulse.value }],
-  }));
-
-  const voiceLevelStyle = useAnimatedStyle(() => {
-    const segments = 20;
-    return {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      height: 24,
-    };
-  });
-
   const startRecording = async () => {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
@@ -118,7 +81,6 @@ export default function VoiceModeScreen({ navigation }) {
       isRecordingRef.current = true;
       setIsRecording(true);
       setOrbState('listening');
-      setStatusText('Listening...');
       setRecordingDuration(0);
       transcriptOpacity.value = 0;
       replyOpacity.value = 0;
@@ -131,13 +93,11 @@ export default function VoiceModeScreen({ navigation }) {
       voiceLevelInterval.current = setInterval(() => {
         level = Math.min(1, level + (Math.random() * 0.4 - 0.15));
         if (level < 0) level = 0.05;
-        voiceLevelAnim.value = withTiming(level, { duration: 100 });
       }, 100);
     } catch {
       Alert.alert('Error', 'Could not start recording');
       setIsRecording(false);
       setOrbState('idle');
-      setStatusText('Tap to speak');
     }
   };
 
@@ -147,24 +107,20 @@ export default function VoiceModeScreen({ navigation }) {
     setIsRecording(false);
     if (durationInterval.current) { clearInterval(durationInterval.current); durationInterval.current = null; }
     if (voiceLevelInterval.current) { clearInterval(voiceLevelInterval.current); voiceLevelInterval.current = null; }
-    voiceLevelAnim.value = withTiming(0, { duration: 200 });
 
     setOrbState('thinking');
-    setStatusText('Thinking...');
 
     try {
       if (recorderState.isRecording) await audioRecorder.stop();
       const uri = audioRecorder.uri;
       if (!uri) {
         setOrbState('idle');
-        setStatusText('No audio captured. Try again.');
         return;
       }
       const audioFile = new File(uri);
       const audioBase64 = await audioFile.base64();
       if (!audioBase64 || audioBase64.length < 100) {
         setOrbState('idle');
-        setStatusText('Recording too short. Try again.');
         return;
       }
 
@@ -181,19 +137,17 @@ export default function VoiceModeScreen({ navigation }) {
         setHasSpoken(true);
         setAiReply(data.reply);
         setOrbState('speaking');
-        setStatusText('Hoy! is speaking...');
         isSpeakingRef.current = true;
 
         setTimeout(() => addConversationItem('assistant', data.reply), 200);
 
         replyOpacity.value = withTiming(1, { duration: 600 });
 
-        Speech.speak(data.reply, {
+        Speech.speak(sanitizeForSpeech(data.reply), {
           language: 'ceb', rate: 0.85,
           onDone: () => {
             isSpeakingRef.current = false;
             setOrbState('idle');
-            setStatusText('Tap to speak');
             if (continuousMode) {
               setTimeout(() => startRecording(), 500);
             }
@@ -201,7 +155,6 @@ export default function VoiceModeScreen({ navigation }) {
           onError: () => {
             isSpeakingRef.current = false;
             setOrbState('idle');
-            setStatusText('Tap to speak');
           },
         });
       }
@@ -209,7 +162,6 @@ export default function VoiceModeScreen({ navigation }) {
       addXp(15, 'voice_practice');
     } catch {
       setOrbState('idle');
-      setStatusText('Connection error. Try again.');
     }
   };
 
@@ -223,7 +175,6 @@ export default function VoiceModeScreen({ navigation }) {
       Speech.stop();
       isSpeakingRef.current = false;
       setOrbState('idle');
-      setStatusText('Tap to speak');
       return;
     }
     if (isRecordingRef.current || recorderState.isRecording) stopRecording();
@@ -301,9 +252,9 @@ export default function VoiceModeScreen({ navigation }) {
 
           {conversation.length === 0 ? (
             <View style={styles.mainContent}>
-              <Animated.View style={[styles.orbContainer, orbAnimatedStyle]}>
-                <VoiceOrb state={orbState} size={ORB_SIZE} />
-              </Animated.View>
+              <View style={styles.orbContainer}>
+                <VoiceOrb state={orbState} size={ORB_SIZE} onPress={toggleRecording} />
+              </View>
 
               <View style={styles.statusSection}>
                 <Animated.View style={transcriptAnimatedStyle}>
@@ -322,14 +273,21 @@ export default function VoiceModeScreen({ navigation }) {
                         <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.replyAvatar}>
                           <Ionicons name="sparkles" size={12} color="#fff" />
                         </LinearGradient>
-                        <Text style={[styles.replyLabel, { color: colors.primary }]}>Hoy!</Text>
+                        <Text style={[styles.replyLabel, { color: colors.primary }]}>Sulti</Text>
                       </View>
                       <WordReveal text={aiReply} style={[styles.replyText, { color: colors.text }]} speed={25} />
                     </View>
                   )}
                 </Animated.View>
 
-                <Text style={[styles.statusText, { color: colors.textLight }]}>{statusText}</Text>
+                <Text style={[styles.statusText, {
+                  color: orbState === 'listening' ? '#EF4444' : orbState === 'speaking' ? colors.primary : orbState === 'thinking' ? colors.accent : colors.textLight,
+                }]}>
+                  {orbState === 'idle' && (hasSpoken ? 'Tap orb to continue' : 'Tap orb to speak')}
+                  {orbState === 'listening' && 'Listening... tap orb to finish'}
+                  {orbState === 'thinking' && 'Sulti is thinking...'}
+                  {orbState === 'speaking' && 'Sulti is speaking...'}
+                </Text>
               </View>
             </View>
           ) : (
@@ -338,7 +296,7 @@ export default function VoiceModeScreen({ navigation }) {
                 ref={listRef}
                 data={conversation}
                 keyExtractor={item => item.id}
-                contentContainerStyle={[styles.conversationList, { paddingTop: insets.top + 60, paddingBottom: 180 }]}
+                contentContainerStyle={[styles.conversationList, { paddingTop: insets.top + 60, paddingBottom: 200 }]}
                 renderItem={({ item }) => (
                   <View style={[styles.conversationItem, item.role === 'user' ? styles.userItem : styles.assistantItem]}>
                     {item.role === 'assistant' && (
@@ -364,46 +322,47 @@ export default function VoiceModeScreen({ navigation }) {
 
           <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}>
             {isRecording && (
-              <View style={styles.recordingInfo}>
-                <View style={styles.recordingDot} />
-                <Text style={[styles.recordingTime, { color: colors.textSecondary }]}>{formatTime(recordingDuration)}</Text>
-              </View>
+              <>
+                <View style={styles.recordingInfo}>
+                  <View style={styles.recordingDot} />
+                  <Text style={[styles.recordingTime, { color: colors.textSecondary }]}>{formatTime(recordingDuration)}</Text>
+                </View>
+                <View style={styles.voiceLevelContainer}>
+                  {renderWaveform()}
+                </View>
+                <View style={[styles.liveTranscriptCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
+                  <Ionicons name="mic" size={14} color="#EF4444" style={{ marginRight: 6 }} />
+                  <Text style={[styles.liveTranscriptText, { color: colors.text }]}>Listening...</Text>
+                </View>
+              </>
             )}
 
-            <Animated.View style={[styles.micButtonWrapper, micButtonStyle]}>
+            {conversation.length > 0 && !isRecording && !isSpeakingRef.current && (
               <TouchableOpacity
-                style={[styles.micButton, { shadowColor: isRecording ? '#EF4444' : colors.primary }]}
                 onPress={toggleRecording}
                 activeOpacity={0.8}
-                accessibilityLabel={isRecording ? 'Stop recording' : isSpeakingRef.current ? 'Stop speaking' : 'Start recording'}
+                style={[styles.miniOrbBtn, { shadowColor: colors.primary }]}
               >
                 <LinearGradient
-                  colors={isRecording ? ['#EF4444', '#DC2626'] : [colors.primary, colors.primaryDark || colors.primary]}
+                  colors={[colors.orbGradient1 || colors.primary, colors.orbGradient2 || colors.secondary]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={styles.micGradient}
+                  style={styles.miniOrbGradient}
                 >
-                  <Ionicons
-                    name={isSpeakingRef.current ? 'stop-circle' : isRecording ? 'stop' : 'mic'}
-                    size={32} color="#fff"
-                  />
+                  <Ionicons name="mic" size={24} color="#fff" />
                 </LinearGradient>
+                <Text style={[styles.miniOrbLabel, { color: colors.textLight }]}>Tap to speak</Text>
               </TouchableOpacity>
-            </Animated.View>
-
-            {isRecording && (
-              <View style={styles.voiceLevelContainer}>
-                {renderWaveform()}
-              </View>
             )}
 
-            {!isRecording && !isSpeakingRef.current && conversation.length === 0 && !transcript && (
-              <Text style={[styles.tapHint, { color: colors.textLight }]}>Tap to speak</Text>
-            )}
-            {!isRecording && !isSpeakingRef.current && conversation.length > 0 && (
-              <Text style={[styles.tapHint, { color: colors.textLight }]}>Tap to continue</Text>
-            )}
-            {isSpeakingRef.current && (
-              <Text style={[styles.tapHint, { color: colors.textLight }]}>Tap to interrupt</Text>
+            {conversation.length > 0 && !isRecording && !isSpeakingRef.current && (
+              <TouchableOpacity
+                onPress={dismiss}
+                style={[styles.endSessionBtn, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={colors.error} />
+                <Text style={[styles.endSessionText, { color: colors.error }]}>End Voice Session</Text>
+              </TouchableOpacity>
             )}
           </View>
         </Animated.View>
@@ -443,9 +402,12 @@ const styles = StyleSheet.create({
   recordingInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
   recordingTime: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  micButtonWrapper: { alignItems: 'center', justifyContent: 'center' },
-  micButton: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
-  micGradient: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center' },
-  tapHint: { fontSize: 12, fontWeight: '500', letterSpacing: 0.5 },
   voiceLevelContainer: { height: 24, justifyContent: 'center', alignItems: 'center' },
+  endSessionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, borderWidth: 1 },
+  miniOrbBtn: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+  miniOrbGradient: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
+  miniOrbLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.5, marginTop: 4 },
+  liveTranscriptCard: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1, marginHorizontal: 20 },
+  liveTranscriptText: { fontSize: 14, fontStyle: 'italic', flex: 1 },
+  endSessionText: { fontSize: 14, fontWeight: '600' },
 });

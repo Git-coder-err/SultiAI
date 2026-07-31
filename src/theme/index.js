@@ -85,6 +85,8 @@ export const spacing = {
   huge: 48,
 };
 
+export const getTabBarClearance = (insets = {}) => (insets.bottom || 0) + 88;
+
 export const borderRadius = {
   sm: 8,
   md: 12,

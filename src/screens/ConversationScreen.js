@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
-import { spacing, borderRadius, shadows } from '../theme';
+import { spacing, borderRadius, shadows, getTabBarClearance } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SUGGESTIONS = [
@@ -58,7 +58,7 @@ export default function ConversationScreen({ navigation }) {
         <Text style={styles.subtitle}>Get useful Bisaya phrases for any situation</Text>
       </View>
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: getTabBarClearance(insets) }]}>
         <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TextInput
             style={[styles.input, { color: colors.text }]}
