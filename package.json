@@ -36,7 +36,9 @@
     "dev": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "server": "npm run start --prefix server",
+    "server:dev": "npm run dev --prefix server"
   },
   "private": true,
   "devDependencies": {

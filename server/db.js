@@ -8,11 +8,16 @@ let sqliteDb;
 let mysqlPool;
 
 function initSqlite() {
-  sqliteDb = new Database(DB_PATH);
-  sqliteDb.pragma('journal_mode = WAL');
-  sqliteDb.pragma('foreign_keys = ON');
-  console.log('SQLite connected:', DB_PATH);
-  return sqliteDb;
+  try {
+    sqliteDb = new Database(DB_PATH);
+    sqliteDb.pragma('journal_mode = WAL');
+    sqliteDb.pragma('foreign_keys = ON');
+    console.log('SQLite connected:', DB_PATH);
+    return sqliteDb;
+  } catch (error) {
+    console.error('SQLite connection failed:', error.message);
+    return null;
+  }
 }
 
 async function initMysql() {

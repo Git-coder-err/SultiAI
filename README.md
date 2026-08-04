@@ -439,12 +439,33 @@ SOFTWARE.
 
 This section provides instructions for collaborators and other devices to set up and configure the SultiAI application to work with a shared backend server.
 
-### 1. Set Up the `server/.env` File with Your GROQ_API_KEY
+## Backend (required)
 
-Create a `.env` file in the server directory (if it doesn't already exist) and add your GROQ API key:
+The supported API is the TypeScript Express server under `server/` (`server/src/index.ts`).
 
 ```bash
-echo "GROQ_API_KEY=your_groq_api_key_here" > server/.env
+# From repo root (recommended)
+npm run server:dev
+
+# Or from the server package
+cd server
+npm install
+cp .env.example .env   # then set GROQ_API_KEY and JWT_SECRET
+npm run dev            # hot reload via tsx
+# npm start            # runs compiled dist/index.js
+```
+
+Health check: `http://localhost:3001/api/health`
+
+Do not use a plain `server/index.js` stub — that path is not part of the supported stack.
+
+## 1. Set Up the `server/.env` File with Your GROQ_API_KEY
+
+Create a `.env` file in the server directory (if it doesn't already exist). Copy from the example and add your Groq API key:
+
+```bash
+cp server/.env.example server/.env
+# Edit server/.env and set GROQ_API_KEY and JWT_SECRET
 ```
 
 ### 2. Point the App to the Backend IP Address
