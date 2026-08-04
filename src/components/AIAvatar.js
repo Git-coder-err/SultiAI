@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withRepeat, withTiming,
+  useSharedValue, useAnimatedStyle, useAnimatedProps, withRepeat, withTiming,
   withSpring, withSequence, cancelAnimation, Easing,
 } from 'react-native-reanimated';
 import Svg, { Circle, Path, Ellipse, G, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
@@ -120,28 +120,35 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
     ],
   }));
 
-  const leftEyeStyle = useAnimatedStyle(() => ({
-    opacity: blinkAnim.value > 0.5 ? 0 : 1,
-    transform: [{ scaleY: blinkAnim.value > 0.5 ? 0.01 : 1 }],
-  }));
-
-  const rightEyeStyle = useAnimatedStyle(() => ({
-    opacity: blinkAnim.value > 0.5 ? 0 : 1,
-    transform: [{ scaleY: blinkAnim.value > 0.5 ? 0.01 : 1 }],
-  }));
-
-  const leftBrowStyle = useAnimatedStyle(() => {
-    const tilt = mood === 'thinking' ? browAnim.value * (-4) : mood === 'speaking' ? 0 : 0;
+  const leftEyeProps = useAnimatedProps(() => {
+    const closed = blinkAnim.value > 0.5;
     return {
-      transform: [{ translateY: tilt }],
+      opacity: closed ? 0 : 1,
+      transform: `scaleY(${closed ? 0.01 : 1})`,
     };
   });
 
-  const rightBrowStyle = useAnimatedStyle(() => {
-    const tilt = mood === 'thinking' ? browAnim.value * 4 : mood === 'speaking' ? 0 : 0;
+  const rightEyeProps = useAnimatedProps(() => {
+    const closed = blinkAnim.value > 0.5;
     return {
-      transform: [{ translateY: tilt }],
+      opacity: closed ? 0 : 1,
+      transform: `scaleY(${closed ? 0.01 : 1})`,
     };
+  });
+
+  const mouthProps = useAnimatedProps(() => {
+    const open = mouthAnim.value;
+    return { transform: `scaleY(${0.75 + 0.25 * open})` };
+  });
+
+  const leftBrowProps = useAnimatedProps(() => {
+    const tilt = mood === 'thinking' ? browAnim.value * (-4) : 0;
+    return { transform: `translateY(${tilt}px)` };
+  });
+
+  const rightBrowProps = useAnimatedProps(() => {
+    const tilt = mood === 'thinking' ? browAnim.value * 4 : 0;
+    return { transform: `translateY(${tilt}px)` };
   });
 
   const pupilOffset = mood === 'thinking' ? -2 : mood === 'listening' ? 2 : 0;
@@ -199,7 +206,7 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
           <Ellipse cx={halfSize + eyeSpacing + 3} cy={mouthY - 2} rx={size * 0.07} ry={size * 0.035} fill={colors.primary + '50'} />
         </G>
 
-        <AnimatedG style={leftBrowStyle}>
+        <AnimatedG animatedProps={leftBrowProps}>
           <Path
             d={`M${halfSize - eyeSpacing - browW},${browY} Q${halfSize - eyeSpacing},${browY - 3} ${halfSize - eyeSpacing + browW},${browY}`}
             fill="none"
@@ -208,7 +215,7 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
             strokeLinecap="round"
           />
         </AnimatedG>
-        <AnimatedG style={rightBrowStyle}>
+        <AnimatedG animatedProps={rightBrowProps}>
           <Path
             d={`M${halfSize + eyeSpacing - browW},${browY} Q${halfSize + eyeSpacing},${browY - 3} ${halfSize + eyeSpacing + browW},${browY}`}
             fill="none"
@@ -219,22 +226,24 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
         </AnimatedG>
 
         <AnimatedG>
-          <AnimatedCircle cx={halfSize - eyeSpacing} cy={eyeY} r={eyeSize} fill="white" style={leftEyeStyle} />
+          <AnimatedCircle cx={halfSize - eyeSpacing} cy={eyeY} r={eyeSize} fill="white" animatedProps={leftEyeProps} />
           <Circle cx={halfSize - eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill={pupilColor} />
         </AnimatedG>
 
         <AnimatedG>
-          <AnimatedCircle cx={halfSize + eyeSpacing} cy={eyeY} r={eyeSize} fill="white" style={rightEyeStyle} />
+          <AnimatedCircle cx={halfSize + eyeSpacing} cy={eyeY} r={eyeSize} fill="white" animatedProps={rightEyeProps} />
           <Circle cx={halfSize + eyeSpacing + pupilOffset} cy={eyeY} r={pupilSize} fill={pupilColor} />
         </AnimatedG>
 
-        <Path
-          d={getMouthPath()}
-          fill="none"
-          stroke="white"
-          strokeWidth={size * 0.025}
-          strokeLinecap="round"
-        />
+        <AnimatedG animatedProps={mouthProps}>
+          <Path
+            d={getMouthPath()}
+            fill="none"
+            stroke="white"
+            strokeWidth={size * 0.025}
+            strokeLinecap="round"
+          />
+        </AnimatedG>
       </Svg>
     </Animated.View>
   );
