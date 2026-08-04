@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import * as Speech from 'expo-speech';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { File } from 'expo-file-system';
 import Animated, {
@@ -17,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '../context/GameContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
-import { sanitizeForSpeech } from '../utils/speech';
+import { speakTTS, stopTTS } from '../utils/tts';
 import GlassCard from '../components/GlassCard';
 import Badge from '../components/Badge';
 import AIAvatar from '../components/AIAvatar';
@@ -179,7 +178,7 @@ export default function HoyTutorScreen({ navigation }) {
     adaptiveTutor.loadState();
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
-      Speech.stop();
+      stopTTS();
     };
   }, []);
 
@@ -244,7 +243,7 @@ export default function HoyTutorScreen({ navigation }) {
   };
 
   const toggleRecording = () => {
-    if (isSpeaking) { Speech.stop(); setIsSpeaking(false); if (continuousMode) setTimeout(() => startRecording(), 300); return; }
+    if (isSpeaking) { stopTTS(); setIsSpeaking(false); if (continuousMode) setTimeout(() => startRecording(), 300); return; }
     if (isRecordingRef.current || recorderState.isRecording) stopRecording();
     else startRecording();
   };
@@ -252,7 +251,7 @@ export default function HoyTutorScreen({ navigation }) {
   const speakReply = (text) => {
     if (!text) return;
     setIsSpeaking(true);
-    Speech.speak(sanitizeForSpeech(text), {
+    speakTTS(text, {
       language: 'ceb', rate: 0.85,
       onDone: () => { setIsSpeaking(false); if (continuousMode) setTimeout(() => startRecording(), 600); },
       onError: () => setIsSpeaking(false),
@@ -625,7 +624,7 @@ export default function HoyTutorScreen({ navigation }) {
             </Text>
             {recorderState.isRecording && <AnimatedWaveform />}
             {isSpeaking && (
-              <TouchableOpacity onPress={() => { Speech.stop(); setIsSpeaking(false); }}>
+              <TouchableOpacity onPress={() => { stopTTS(); setIsSpeaking(false); }}>
                 <Text style={styles.statusActionText}>Skip</Text>
               </TouchableOpacity>
             )}

@@ -1,8 +1,65 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { authMiddleware } from '../middleware/auth';
 import { isGroqConfigured, groqChat, groqTranscribeAudio, groqJson } from '../utils/groq';
 
 const router = Router();
+
+const TTS_CACHE_DIR = path.join(process.cwd(), 'audio-cache');
+const TTS_VOICES: Record<string, string> = {
+  fil: 'fil-PH-BlessicaNeural',
+  'fil-male': 'fil-PH-AngeloNeural',
+  angelo: 'fil-PH-AngeloNeural',
+  blessica: 'fil-PH-BlessicaNeural',
+};
+
+function sanitizeSsml(input: string): string {
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .slice(0, 500);
+}
+
+router.post('/synthesize', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { text, voice, rate } = req.body || {};
+    const clean = sanitizeSsml(text);
+    if (!clean) {
+      res.status(400).json({ error: 'Text is required' });
+      return;
+    }
+    const voiceName = TTS_VOICES[voice] || (typeof voice === 'string' && voice.includes('Neural') ? voice : TTS_VOICES.fil);
+    const rateValue = typeof rate === 'number' ? String(Math.max(0.5, Math.min(1.5, rate))) : '0.9';
+    const hash = crypto.createHash('sha1').update(`${voiceName}|${rateValue}|${clean}`).digest('hex');
+    const filePath = path.join(TTS_CACHE_DIR, `${hash}.mp3`);
+
+    if (!fs.existsSync(filePath)) {
+      fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+      const { audioStream } = await tts.toStream(clean, { rate: rateValue });
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        audioStream.on('data', (d: Buffer) => chunks.push(Buffer.from(d)));
+        audioStream.on('close', () => resolve());
+        audioStream.on('error', (e: Error) => reject(e));
+      });
+      tts.close();
+      fs.writeFileSync(filePath, Buffer.concat(chunks));
+    }
+
+    res.json({ url: `/audio/tts/${hash}.mp3`, voice: voiceName, cached: fs.existsSync(filePath) });
+  } catch (err) {
+    console.error('TTS synthesis error:', err);
+    res.status(500).json({ error: 'Speech synthesis failed' });
+  }
+});
 
 router.post('/translate', authMiddleware, async (req: Request, res: Response) => {
   try {

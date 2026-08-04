@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { connect, closeAll } from './db/connection';
 import { connectMongo, closeMongo } from './db/mongodb/connection';
 import { errorHandler } from './middleware/error';
@@ -34,6 +35,8 @@ const app = express();
 
 app.use(cors({ origin: '*', allowedHeaders: 'Content-Type,Authorization', methods: 'GET,POST,PUT,DELETE,OPTIONS' }));
 app.use(express.json({ limit: '10mb' }));
+
+app.use('/audio/tts', express.static(path.join(process.cwd(), 'audio-cache')));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

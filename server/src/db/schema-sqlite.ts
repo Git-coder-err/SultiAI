@@ -140,6 +140,10 @@ export const learnerProfiles = sqliteTable('learner_profiles', {
   weakAreas: text('weak_areas'),
   commonMistakes: text('common_mistakes'),
   totalXp: integer('total_xp').default(0),
+  coins: integer('coins').default(0),
+  streak: integer('streak').default(0),
+  dailyXp: integer('daily_xp').default(0),
+  dailyGoal: integer('daily_goal').default(50),
   totalSessions: integer('total_sessions').default(0),
   lastActive: text('last_active'),
 });

@@ -10,7 +10,6 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming,
   withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
-import * as Speech from 'expo-speech';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { File } from 'expo-file-system';
 import VoiceOrb from '../components/VoiceOrb';
@@ -19,7 +18,7 @@ import WordReveal from '../components/WordReveal';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
-import { sanitizeForSpeech } from '../utils/speech';
+import { speakTTS, stopTTS } from '../utils/tts';
 
 const ORB_SIZE = 280;
 
@@ -55,7 +54,7 @@ export default function VoiceModeScreen({ navigation }) {
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
       if (voiceLevelInterval.current) clearInterval(voiceLevelInterval.current);
-      Speech.stop();
+      stopTTS();
     };
   }, []);
 
@@ -143,7 +142,7 @@ export default function VoiceModeScreen({ navigation }) {
 
         replyOpacity.value = withTiming(1, { duration: 600 });
 
-        Speech.speak(sanitizeForSpeech(data.reply), {
+        speakTTS(data.reply, {
           language: 'ceb', rate: 0.85,
           onDone: () => {
             isSpeakingRef.current = false;
@@ -172,7 +171,7 @@ export default function VoiceModeScreen({ navigation }) {
 
   const toggleRecording = () => {
     if (isSpeakingRef.current) {
-      Speech.stop();
+      stopTTS();
       isSpeakingRef.current = false;
       setOrbState('idle');
       return;
@@ -182,7 +181,7 @@ export default function VoiceModeScreen({ navigation }) {
   };
 
   const dismiss = () => {
-    Speech.stop();
+    stopTTS();
     navigation.goBack();
   };
 
