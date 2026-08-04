@@ -1,150 +1,171 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
-import Card from '../components/Card';
+import GlassCard from '../components/GlassCard';
+import Avatar from '../components/Avatar';
 import Badge from '../components/Badge';
-import { spacing, borderRadius, shadows, getTabBarClearance } from '../theme';
+import { spacing, borderRadius, shadows } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const SUGGESTIONS = [
-  { label: 'At the Market', icon: 'cart', prompt: 'Buying food at a public market in Cebu' },
-  { label: 'Ordering Food', icon: 'restaurant', prompt: 'Ordering at a restaurant' },
-  { label: 'Greetings', icon: 'hand-left', prompt: 'Greeting someone for the first time' },
-  { label: 'Directions', icon: 'compass', prompt: 'Asking for directions around Cebu City' },
-  { label: 'Jeepney', icon: 'bus', prompt: 'Riding a jeepney and paying the fare' },
-  { label: 'Emergency', icon: 'warning', prompt: 'Emergency situation phrases' },
+const CATEGORIES = [
+  { id: 'market', label: 'At the Market', native: 'Palengke', icon: 'cart', color: '#10B981', prompt: 'Buying food and bargaining at a public market' },
+  { id: 'greetings', label: 'Greetings & Slang', native: 'Kumusta!', icon: 'hand-left', color: '#14B8A6', prompt: 'Casual greetings, introductions, and local slang' },
+  { id: 'jeepney', label: 'Riding a Jeepney', native: 'Jeepney', icon: 'bus', color: '#3B82F6', prompt: 'Commuting via jeepney and tricycle' },
+  { id: 'restaurant', label: 'Ordering Food', native: 'Karenderia', icon: 'restaurant', color: '#F59E0B', prompt: 'Ordering at a carenderia or restaurant' },
+  { id: 'directions', label: 'Directions', native: 'Asa ang...', icon: 'compass', color: '#8B5CF6', prompt: 'Asking for and giving directions' },
+  { id: 'family', label: 'Family & Home', native: 'Pamilya', icon: 'people', color: '#EC4899', prompt: 'Talking about family, home, and relationships' },
+  { id: 'emergency', label: 'Emergency', native: 'Tabang!', icon: 'warning', color: '#EF4444', prompt: 'Emergency and medical situation phrases' },
+  { id: 'travel', label: 'Travel & Tourism', native: 'Biyahe', icon: 'airplane', color: '#06B6D4', prompt: 'Traveling around the Philippines' },
 ];
+
+const DAILY_DRILL = {
+  label: '5-Min Market Haggling',
+  emoji: '\u{1F3AF}',
+  phrase: 'Pila ang kilo sa mangga?',
+  translation: 'How much per kilo of mangoes?',
+  prompt: 'Market bargaining phrases',
+};
 
 export default function ConversationScreen({ navigation }) {
   const { user } = useUser();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const [situation, setSituation] = useState('');
-  const [phrases, setPhrases] = useState([]);
+  const [activeTab, setActiveTab] = useState('phrasebook');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  const getPhrases = async (prompt) => {
-    const query = prompt || situation.trim();
-    if (!query) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.recommendPhrases(query, user?.target_language || 'Bisaya');
-      setPhrases(data.phrases || []);
-    } catch (err) {
-      setError(err.message);
-      setPhrases([]);
-    } finally {
-      setLoading(false);
-    }
+  const handleCategory = (cat) => {
+    navigation.navigate('Learn', { situation: cat.prompt, label: cat.label });
   };
 
-  const handleSuggestion = (prompt) => {
-    setSituation(prompt);
-    getPhrases(prompt);
+  const handleDailyDrill = () => {
+    navigation.navigate('Learn', { situation: DAILY_DRILL.prompt, label: DAILY_DRILL.label });
   };
+
+  const handleFlashcards = () => {
+    navigation.navigate('Flashcards');
+  };
+
+  const handlePronunciation = () => {
+    navigation.navigate('Pronunciation');
+  };
+
+  const tabs = [
+    { key: 'phrasebook', label: 'Phrasebook', icon: 'book' },
+    { key: 'flashcards', label: 'Flashcards', icon: 'layers' },
+    { key: 'speech', label: 'Pronunciation', icon: 'mic' },
+  ];
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 12 }]}>
-        <Text style={styles.title}>Practice</Text>
-        <Text style={styles.subtitle}>Get useful Bisaya phrases for any situation</Text>
-      </View>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <Text style={styles.headerTitle}>Practice</Text>
+        <Text style={styles.headerSubtitle}>Master essential Bisaya phrases & pronunciation</Text>
+      </LinearGradient>
 
-      <View style={[styles.inputRow, { paddingBottom: getTabBarClearance(insets) }]}>
-        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            placeholder="Describe a situation..."
-            placeholderTextColor={colors.textLight}
-            value={situation}
-            onChangeText={setSituation}
-            onSubmitEditing={() => getPhrases()}
-          />
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.primary }]} onPress={() => getPhrases()} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={18} color="#fff" />}
-          </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+        <View style={styles.tabRow}>
+          {tabs.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[
+                styles.tab,
+                activeTab === t.key
+                  ? [styles.tabActive, { backgroundColor: colors.primary }]
+                  : { backgroundColor: isDark ? colors.surface : '#F1F5F9' },
+              ]}
+              onPress={() => {
+                setActiveTab(t.key);
+                if (t.key === 'flashcards') handleFlashcards();
+                if (t.key === 'speech') handlePronunciation();
+              }}
+            >
+              <Ionicons name={t.icon} size={16} color={activeTab === t.key ? '#fff' : colors.textSecondary} />
+              <Text style={[styles.tabText, { color: activeTab === t.key ? '#fff' : colors.textSecondary }]}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </View>
 
-      <View style={styles.suggestionsRow}>
-        {SUGGESTIONS.map((s) => (
-          <TouchableOpacity key={s.label} style={[styles.chip, { backgroundColor: colors.primaryLight, borderColor: colors.primary + '30' }]} onPress={() => handleSuggestion(s.prompt)}>
-            <Ionicons name={s.icon} size={14} color={colors.primary} />
-            <Text style={[styles.chipText, { color: colors.primary }]}>{s.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <FlatList
-        data={phrases}
-        keyExtractor={(_, i) => i.toString()}
-        renderItem={({ item, index }) => (
-          <Card style={styles.phraseCard} variant="outlined">
-            <View style={[styles.phraseNumber, { backgroundColor: colors.primary }]}>
-              <Text style={styles.phraseNumberText}>{index + 1}</Text>
-            </View>
-            <Text style={[styles.phraseText, { color: colors.text }]}>{item}</Text>
-          </Card>
-        )}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={phrases.length > 0 && (
-          <Text style={[styles.resultTitle, { color: colors.text }]}>
-            Phrases for "{situation}"
-          </Text>
-        )}
-        ListEmptyComponent={
-          !loading && (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.primaryLight }]}>
-                <Ionicons name="chatbubbles-outline" size={40} color={colors.primary} />
+        <View style={styles.content}>
+          <GlassCard variant="elevated" style={styles.dailyCard}>
+            <LinearGradient
+              colors={isDark ? ['#1E293B', '#0F172A'] : ['#0F172A', '#1E293B']}
+              style={styles.dailyInner}
+            >
+              <View style={styles.dailyLeft}>
+                <View style={styles.dailyBadgeRow}>
+                  <Badge title="Daily Practice" variant="info" size="sm" />
+                </View>
+                <Text style={styles.dailyTitle}>{DAILY_DRILL.emoji} {DAILY_DRILL.label}</Text>
+                <Text style={styles.dailyPhrase}>"{DAILY_DRILL.phrase}"</Text>
+                <Text style={styles.dailyTranslation}>{DAILY_DRILL.translation}</Text>
               </View>
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Practice Conversations</Text>
-              <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-                Describe a real-life situation or tap a suggestion above to get relevant Bisaya phrases.
-              </Text>
-            </View>
-          )
-        }
-        ListFooterComponent={
-          error && (
-            <Card variant="outlined" style={{ borderLeftColor: '#EF4444', borderLeftWidth: 3 }}>
-              <Text style={{ color: '#EF4444', fontWeight: '600' }}>{error}</Text>
-            </Card>
-          )
-        }
-      />
-    </KeyboardAvoidingView>
+              <TouchableOpacity style={[styles.dailyBtn, { backgroundColor: colors.primary }]} onPress={handleDailyDrill} activeOpacity={0.8}>
+                <Ionicons name="play" size={18} color="#fff" />
+                <Text style={styles.dailyBtnText}>Start</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </GlassCard>
+
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Explore Categories</Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+            Tap a category to practice situational phrases with Hoy!
+          </Text>
+
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity key={cat.id} onPress={() => handleCategory(cat)} activeOpacity={0.7}>
+              <GlassCard variant="tinted" style={styles.catCard} padding="md">
+                <View style={[styles.catIcon, { backgroundColor: cat.color + '20' }]}>
+                  <Ionicons name={cat.icon} size={22} color={cat.color} />
+                </View>
+                <View style={styles.catInfo}>
+                  <Text style={[styles.catLabel, { color: colors.text }]}>{cat.label}</Text>
+                  <Text style={[styles.catNative, { color: colors.textSecondary }]}>{cat.native}</Text>
+                </View>
+                <View style={[styles.catBadge, { backgroundColor: cat.color + '15' }]}>
+                  <Text style={[styles.catBadgeText, { color: cat.color }]}>{cat.prompt.length > 25 ? Math.floor(cat.prompt.length / 3) : 8} phrases</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+              </GlassCard>
+            </TouchableOpacity>
+            ))}
+          </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { paddingBottom: spacing.lg, paddingHorizontal: spacing.xl },
-  title: { fontSize: 26, fontWeight: '800', color: '#fff' },
-  subtitle: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
-  inputRow: { padding: spacing.xl, paddingBottom: spacing.sm },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.lg, borderWidth: 1.5, paddingLeft: spacing.lg, ...shadows.sm },
-  input: { flex: 1, paddingVertical: 14, fontSize: 15 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', margin: 4 },
-  suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.xl, gap: spacing.sm, marginBottom: spacing.lg },
-  chip: { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, gap: spacing.xs, borderWidth: 1 },
-  chipText: { fontSize: 12, fontWeight: '600' },
-  list: { padding: spacing.xl, paddingTop: 0 },
-  resultTitle: { fontSize: 16, fontWeight: '700', marginBottom: spacing.md },
-  phraseCard: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
-  phraseNumber: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md, marginTop: 2 },
-  phraseNumberText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  phraseText: { flex: 1, fontSize: 15, lineHeight: 22 },
-  empty: { alignItems: 'center', paddingTop: 40, paddingHorizontal: spacing.xl },
-  emptyIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xl },
-  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.sm },
-  emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  root: { flex: 1 },
+  header: { paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: 0.36 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4, letterSpacing: -0.08 },
+  tabRow: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginTop: -spacing.lg, marginBottom: spacing.lg },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, gap: spacing.xs, ...shadows.sm },
+  tabActive: { shadowColor: '#0D9488', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  tabText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.07 },
+  content: { padding: spacing.xl, paddingTop: 0 },
+  dailyCard: { marginBottom: spacing.xxl, overflow: 'hidden' },
+  dailyInner: { borderRadius: borderRadius.lg, padding: spacing.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dailyLeft: { flex: 1, marginRight: spacing.md },
+  dailyBadgeRow: { marginBottom: spacing.sm },
+  dailyTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: spacing.sm },
+  dailyPhrase: { fontSize: 15, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', marginBottom: 2 },
+  dailyTranslation: { fontSize: 13, color: 'rgba(255,255,255,0.55)' },
+  dailyBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderRadius: borderRadius.full, gap: 6, ...shadows.md },
+  dailyBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.xs },
+  sectionSubtitle: { fontSize: 13, marginBottom: spacing.lg, lineHeight: 18 },
+  catCard: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.md },
+  catIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  catInfo: { flex: 1 },
+  catLabel: { fontSize: 15, fontWeight: '600' },
+  catNative: { fontSize: 12, marginTop: 2 },
+  catBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full, marginRight: spacing.sm },
+  catBadgeText: { fontSize: 11, fontWeight: '600' },
 });
