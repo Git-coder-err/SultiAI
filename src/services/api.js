@@ -1,8 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
-const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-export const BASE_URL = `http://${LOCALHOST}:3001`;
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 async function getToken() {
   return AsyncStorage.getItem('auth_token');
