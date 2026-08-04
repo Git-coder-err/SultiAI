@@ -1,113 +1,313 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, Platform, FlatList,
+  View, Text, StyleSheet, TouchableOpacity, Alert, FlatList,
+  ScrollView, AppState,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming,
-  withRepeat, withSequence, Easing,
+  useSharedValue, withTiming, FadeInDown,
 } from 'react-native-reanimated';
-import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import {
+  useAudioRecorder, useAudioRecorderState, RecordingPresets,
+  requestRecordingPermissionsAsync, setAudioModeAsync, useAudioSampleListener,
+} from 'expo-audio';
 import { File } from 'expo-file-system';
-import VoiceOrb from '../components/VoiceOrb';
-import AuroraBackground from '../components/AuroraBackground';
-import WordReveal from '../components/WordReveal';
-import { useTheme } from '../context/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import VoiceBackground from '../components/voice/VoiceBackground';
+import VoiceOrb from '../components/voice/VoiceOrb';
+import StatusPill from '../components/voice/StatusPill';
+import Greeting from '../components/voice/Greeting';
+import SuggestedChips from '../components/voice/SuggestedChips';
+import VoiceControls from '../components/voice/VoiceControls';
+import SettingsSheet from '../components/voice/SettingsSheet';
+import XpToast from '../components/voice/XpToast';
+import { UserMessage, HoyMessage, TypingIndicator } from '../components/voice/MessageBubble';
+import { voice } from '../components/voice/palette';
 import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
-import { speakTTS, stopTTS } from '../utils/tts';
+import { speakTTS, stopTTS, setTTSMuted, getAudioPlayer } from '../utils/tts';
+import {
+  hapticMicStart, hapticMicEnd, hapticAIBeginsSpeaking, hapticAIFinished,
+  hapticError, hapticTap, hapticXpGain, setHapticsEnabled,
+} from '../utils/haptics';
 
-const ORB_SIZE = 280;
+const ORB_INTRO = 200;
+const ORB_TALK = 150;
+const PREFS = {
+  haptics: 'voice_haptics',
+  continuous: 'voice_continuous',
+  slow: 'voice_slow',
+  muted: 'voice_muted',
+  lang: 'voice_lang',
+};
+
+function normalizeMetering(m) {
+  if (m == null || Number.isNaN(m)) return 0;
+  if (m > 1) return Math.max(0, Math.min(1, m / 32767));
+  if (m < 0) return Math.max(0, Math.min(1, (m + 60) / 60));
+  return Math.max(0, Math.min(1, m));
+}
 
 export default function VoiceModeScreen({ navigation }) {
-  const { colors, isDark } = useTheme();
-  const { addXp } = useGame();
+  const { addXp, streak } = useGame();
   const insets = useSafeAreaInsets();
 
   const [orbState, setOrbState] = useState('idle');
-  const [transcript, setTranscript] = useState('');
-  const [aiReply, setAiReply] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+  const [conversation, setConversation] = useState([]);
   const [sessionId, setSessionId] = useState(null);
+  const [recording, setRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasSpoken, setHasSpoken] = useState(false);
-  const [conversation, setConversation] = useState([]);
-  const [continuousMode, setContinuousMode] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [slowMode, setSlowMode] = useState(false);
+  const [hapticsEnabled, setHapticsEnabledState] = useState(true);
+  const [continuous, setContinuous] = useState(false);
+  const [language, setLanguage] = useState('bisaya');
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [xpToastVisible, setXpToastVisible] = useState(false);
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const recorderState = useAudioRecorderState(audioRecorder);
-  const durationInterval = useRef(null);
-  const voiceLevelInterval = useRef(null);
-  const isRecordingRef = useRef(false);
-  const listRef = useRef(null);
-  const isSpeakingRef = useRef(false);
 
-  const contentOpacity = useSharedValue(0);
-  const transcriptOpacity = useSharedValue(0);
-  const replyOpacity = useSharedValue(0);
+  const amplitude = useSharedValue(0);
+  const listRef = useRef(null);
+  const isRecordingRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const sessionIdRef = useRef(null);
+  const continuousRef = useRef(false);
+  const mutedRef = useRef(false);
+  const slowRef = useRef(false);
+  const langRef = useRef('bisaya');
+  const lastSampleAt = useRef(0);
+  const lastReplyRef = useRef('');
+  const durationTimer = useRef(null);
+  const xpTimer = useRef(null);
+  const restartTimer = useRef(null);
+  const stopRecordingRef = useRef(null);
 
   useEffect(() => {
-    contentOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.sin) });
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+  useEffect(() => {
+    continuousRef.current = continuous;
+  }, [continuous]);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+  useEffect(() => {
+    slowRef.current = slowMode;
+  }, [slowMode]);
+  useEffect(() => {
+    langRef.current = language;
+  }, [language]);
+
+  // Restore persisted preferences
+  useEffect(() => {
+    (async () => {
+      try {
+        const [h, c, s, m, l] = await Promise.all([
+          AsyncStorage.getItem(PREFS.haptics),
+          AsyncStorage.getItem(PREFS.continuous),
+          AsyncStorage.getItem(PREFS.slow),
+          AsyncStorage.getItem(PREFS.muted),
+          AsyncStorage.getItem(PREFS.lang),
+        ]);
+        if (h !== null) setHapticsEnabledState(h === '1');
+        if (c !== null) setContinuous(c === '1');
+        if (s !== null) setSlowMode(s === '1');
+        if (m !== null) setMuted(m === '1');
+        if (l !== null) setLanguage(l);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    setTTSMuted(muted);
+    AsyncStorage.setItem(PREFS.muted, muted ? '1' : '0').catch(() => {});
+  }, [muted]);
+
+  useEffect(() => {
+    setHapticsEnabled(hapticsEnabled);
+    AsyncStorage.setItem(PREFS.haptics, hapticsEnabled ? '1' : '0').catch(() => {});
+  }, [hapticsEnabled]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(PREFS.continuous, continuous ? '1' : '0').catch(() => {});
+  }, [continuous]);
+  useEffect(() => {
+    AsyncStorage.setItem(PREFS.slow, slowMode ? '1' : '0').catch(() => {});
+  }, [slowMode]);
+  useEffect(() => {
+    AsyncStorage.setItem(PREFS.lang, language).catch(() => {});
+  }, [language]);
+
+  // Real-time audio level: mic metering while listening, TTS samples while speaking
+  const handleSample = useCallback((sample) => {
+    try {
+      const ch = sample && sample.channels && sample.channels[0];
+      if (ch && ch.frames && ch.frames.length) {
+        const frames = ch.frames;
+        const step = Math.max(1, Math.floor(frames.length / 256));
+        let sum = 0;
+        let n = 0;
+        for (let i = 0; i < frames.length; i += step) {
+          const v = frames[i] || 0;
+          sum += v * v;
+          n++;
+        }
+        const rms = Math.sqrt(sum / Math.max(1, n));
+        amplitude.value = Math.min(1, rms * 4);
+        lastSampleAt.current = Date.now();
+      }
+    } catch {}
+  }, [amplitude]);
+
+  useAudioSampleListener(getAudioPlayer(), handleSample);
+
+  useEffect(() => {
+    let timer = null;
+    if (orbState === 'listening') {
+      timer = setInterval(async () => {
+        let level;
+        try {
+          const status = await audioRecorder.getStatus();
+          level = status && status.metering;
+        } catch {}
+        if (level == null) {
+          amplitude.value = 0.18 + 0.3 * Math.abs(Math.sin(Date.now() / 260));
+        } else {
+          amplitude.value = Math.max(0.05, normalizeMetering(level));
+        }
+      }, 90);
+    } else if (orbState === 'speaking') {
+      let t = 0;
+      timer = setInterval(() => {
+        t += 0.32;
+        if (Date.now() - lastSampleAt.current > 700) {
+          amplitude.value = 0.28 + 0.32 * (Math.sin(t) * 0.5 + 0.5);
+        }
+      }, 50);
+    } else if (orbState === 'thinking') {
+      amplitude.value = withTiming(0.08, { duration: 300 });
+    } else {
+      amplitude.value = withTiming(0, { duration: 500 });
+    }
     return () => {
-      if (durationInterval.current) clearInterval(durationInterval.current);
-      if (voiceLevelInterval.current) clearInterval(voiceLevelInterval.current);
+      if (timer) clearInterval(timer);
+    };
+  }, [orbState, audioRecorder, amplitude]);
+
+  // Stop recording if the app goes to the background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active' && isRecordingRef.current) {
+        stopRecordingRef.current && stopRecordingRef.current();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (durationTimer.current) clearInterval(durationTimer.current);
+      if (restartTimer.current) clearTimeout(restartTimer.current);
+      if (xpTimer.current) clearTimeout(xpTimer.current);
       stopTTS();
     };
   }, []);
 
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
-
-  const transcriptAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: transcriptOpacity.value,
-  }));
-
-  const replyAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: replyOpacity.value,
-  }));
-
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert('Permission Denied', 'Microphone access is needed.'); return; }
+      if (!granted) {
+        Alert.alert('Permission needed', 'Microphone access is required for voice mode.');
+        return;
+      }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       isRecordingRef.current = true;
-      setIsRecording(true);
-      setOrbState('listening');
+      setRecording(true);
       setRecordingDuration(0);
-      transcriptOpacity.value = 0;
-      replyOpacity.value = 0;
-
-      durationInterval.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
+      setOrbState('listening');
+      hapticMicStart();
+      durationTimer.current = setInterval(() => {
+        setRecordingDuration((d) => d + 1);
       }, 1000);
+    } catch (e) {
+      setRecording(false);
+      setOrbState('idle');
+      hapticError();
+      Alert.alert('Error', 'Could not start recording.');
+    }
+  }, [audioRecorder]);
 
-      let level = 0;
-      voiceLevelInterval.current = setInterval(() => {
-        level = Math.min(1, level + (Math.random() * 0.4 - 0.15));
-        if (level < 0) level = 0.05;
-      }, 100);
-    } catch {
-      Alert.alert('Error', 'Could not start recording');
-      setIsRecording(false);
+  const speakReply = useCallback((text, rate = 0.85) => {
+    stopTTS();
+    isSpeakingRef.current = true;
+    lastReplyRef.current = text;
+    setOrbState('speaking');
+    hapticAIBeginsSpeaking();
+    speakTTS(text, {
+      language: langRef.current === 'bisaya' ? 'ceb' : 'en-US',
+      rate,
+      onDone: () => {
+        isSpeakingRef.current = false;
+        setOrbState('idle');
+        hapticAIFinished();
+        if (continuousRef.current && !isRecordingRef.current) {
+          restartTimer.current = setTimeout(() => startRecording(), 650);
+        }
+      },
+      onError: () => {
+        isSpeakingRef.current = false;
+        setOrbState('idle');
+        hapticAIFinished();
+      },
+    });
+  }, [startRecording]);
+
+  const addMessage = useCallback((role, text, pronunciation) => {
+    setConversation((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${Math.random()}`, role, text, pronunciation },
+    ]);
+    setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 150);
+  }, []);
+
+  const handleAiResponse = useCallback((data) => {
+    if (data.session_id) setSessionId(data.session_id);
+
+    if (data.transcription) {
+      addMessage('user', data.transcription, data.pronunciation || null);
+    }
+
+    if (data.reply) {
+      setHasSpoken(true);
+      addMessage('assistant', data.reply, null);
+      speakReply(data.reply, slowRef.current ? 0.55 : 0.85);
+      addXp(15, 'voice_practice');
+      setXpToastVisible(true);
+      hapticXpGain();
+      if (xpTimer.current) clearTimeout(xpTimer.current);
+      xpTimer.current = setTimeout(() => setXpToastVisible(false), 2400);
+    } else {
       setOrbState('idle');
     }
-  };
+  }, [addXp, speakReply]);
 
-  const stopRecording = async () => {
+  const stopRecording = useCallback(async () => {
     if (!isRecordingRef.current && !recorderState.isRecording) return;
     isRecordingRef.current = false;
-    setIsRecording(false);
-    if (durationInterval.current) { clearInterval(durationInterval.current); durationInterval.current = null; }
-    if (voiceLevelInterval.current) { clearInterval(voiceLevelInterval.current); voiceLevelInterval.current = null; }
-
+    setRecording(false);
+    if (durationTimer.current) {
+      clearInterval(durationTimer.current);
+      durationTimer.current = null;
+    }
     setOrbState('thinking');
+    hapticMicEnd();
 
     try {
       if (recorderState.isRecording) await audioRecorder.stop();
@@ -123,290 +323,258 @@ export default function VoiceModeScreen({ navigation }) {
         return;
       }
 
-      const data = await api.tutorChat('', audioBase64, sessionId);
-      if (data.session_id) setSessionId(data.session_id);
-
-      if (data.transcription) {
-        setTranscript(data.transcription);
-        transcriptOpacity.value = withTiming(1, { duration: 400 });
-        addConversationItem('user', data.transcription);
-      }
-
-      if (data.reply) {
-        setHasSpoken(true);
-        setAiReply(data.reply);
-        setOrbState('speaking');
-        isSpeakingRef.current = true;
-
-        setTimeout(() => addConversationItem('assistant', data.reply), 200);
-
-        replyOpacity.value = withTiming(1, { duration: 600 });
-
-        speakTTS(data.reply, {
-          language: 'ceb', rate: 0.85,
-          onDone: () => {
-            isSpeakingRef.current = false;
-            setOrbState('idle');
-            if (continuousMode) {
-              setTimeout(() => startRecording(), 500);
-            }
-          },
-          onError: () => {
-            isSpeakingRef.current = false;
-            setOrbState('idle');
-          },
-        });
-      }
-
-      addXp(15, 'voice_practice');
-    } catch {
+      const data = await api.tutorChat('', audioBase64, sessionIdRef.current);
+      handleAiResponse(data);
+    } catch (e) {
       setOrbState('idle');
+      hapticError();
+      Alert.alert('Error', 'Could not process your voice. Please try again.');
     }
-  };
+  }, [audioRecorder, recorderState.isRecording, handleAiResponse]);
 
-  const addConversationItem = (role, text) => {
-    setConversation(prev => [...prev, { id: Date.now().toString(), role, text }]);
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-  };
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
 
-  const toggleRecording = () => {
+  const sendText = useCallback(async (message) => {
+    if (isSpeakingRef.current) stopTTS();
+    if (isRecordingRef.current) {
+      await stopRecording();
+      return;
+    }
+    addMessage('user', message, null);
+    setOrbState('thinking');
+    try {
+      const data = await api.tutorChat(message, null, sessionIdRef.current);
+      handleAiResponse(data);
+    } catch (e) {
+      setOrbState('idle');
+      hapticError();
+      Alert.alert('Error', 'Could not reach the tutor right now.');
+    }
+  }, [stopRecording, handleAiResponse, addMessage]);
+
+  const toggleRecording = useCallback(() => {
     if (isSpeakingRef.current) {
       stopTTS();
       isSpeakingRef.current = false;
       setOrbState('idle');
+      hapticTap();
       return;
     }
     if (isRecordingRef.current || recorderState.isRecording) stopRecording();
     else startRecording();
-  };
+  }, [startRecording, stopRecording, recorderState.isRecording]);
 
-  const dismiss = () => {
+  const replayLast = useCallback(() => {
+    if (!lastReplyRef.current) return;
+    hapticTap();
+    speakReply(lastReplyRef.current, slowRef.current ? 0.55 : 0.85);
+  }, [speakReply]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      if (!m) stopTTS();
+      hapticTap();
+      return !m;
+    });
+  }, []);
+
+  const toggleSlow = useCallback(() => {
+    setSlowMode((s) => !s);
+    hapticTap();
+  }, []);
+
+  const toggleLanguage = useCallback(() => {
+    setLanguage((l) => (l === 'bisaya' ? 'english' : 'bisaya'));
+    hapticTap();
+  }, []);
+
+  const endSession = useCallback(() => {
     stopTTS();
+    isSpeakingRef.current = false;
+    isRecordingRef.current = false;
+    if (recorderState.isRecording) audioRecorder.stop().catch(() => {});
     navigation.goBack();
-  };
+  }, [audioRecorder, recorderState.isRecording, navigation]);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
+  const onSuggestion = useCallback((label) => {
+    hapticTap();
+    sendText(label);
+  }, [sendText]);
 
-  const renderWaveform = () => {
-    const barCount = 5;
-    return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 20 }}>
-        {Array.from({ length: barCount }, (_, i) => (
-          <AnimatedBar key={i} index={i} barCount={barCount} />
-        ))}
-      </View>
-    );
-  };
+  const speakCard = useCallback((rate) => {
+    speakReply(lastReplyRef.current, rate);
+  }, [speakReply]);
 
-  function AnimatedBar({ index, barCount }) {
-    const h = useSharedValue(4);
+  const inConversation = conversation.length > 0 || hasSpoken;
 
-    useEffect(() => {
-      h.value = withRepeat(
-        withSequence(
-          withTiming(4 + Math.random() * 16, { duration: 300 + index * 50 }),
-          withTiming(4, { duration: 300 + index * 50 }),
-        ),
-        -1, true
-      );
-    }, []);
+  const renderItem = useCallback(({ item, index }) => {
+    if (item.role === 'user') {
+      return <UserMessage text={item.text} pronunciation={item.pronunciation} />;
+    }
+    const isLast = index === conversation.length - 1;
+    return <HoyMessage text={item.text} speaking={orbState === 'speaking' && isLast} onSpeak={speakCard} />;
+  }, [orbState, speakCard, conversation.length]);
 
-    const barStyle = useAnimatedStyle(() => ({
-      width: 3,
-      height: h.value,
-      borderRadius: 1.5,
-      backgroundColor: colors.primary,
-    }));
-
-    return <Animated.View style={barStyle} />;
-  }
+  const isThinking = orbState === 'thinking';
 
   return (
     <View style={styles.root}>
-      <AuroraBackground>
-        <Animated.View style={[styles.overlay, contentAnimatedStyle]}>
-          <BlurView
-            intensity={Platform.OS === 'web' ? 0 : 20}
-            tint={isDark ? 'dark' : 'light'}
-            style={[styles.topBar, { paddingTop: insets.top + 8 }]}
-          >
-            <TouchableOpacity onPress={dismiss} activeOpacity={0.7} style={styles.closeBtn} accessibilityLabel="Close voice mode">
-              <View style={[styles.closeBtnInner, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
-                <Ionicons name="chevron-down" size={22} color={colors.text} />
-              </View>
-            </TouchableOpacity>
-            <Text style={[styles.topTitle, { color: colors.text }]}>Voice Mode</Text>
-            <TouchableOpacity
-              onPress={() => setContinuousMode(!continuousMode)}
-              activeOpacity={0.7}
-              style={[styles.continuousToggle, continuousMode && { backgroundColor: colors.primary + '30' }]}
-            >
-              <Ionicons name="infinite" size={18} color={continuousMode ? colors.primary : colors.textLight} />
-            </TouchableOpacity>
-          </BlurView>
-
-          {conversation.length === 0 ? (
-            <View style={styles.mainContent}>
-              <View style={styles.orbContainer}>
-                <VoiceOrb state={orbState} size={ORB_SIZE} onPress={toggleRecording} />
-              </View>
-
-              <View style={styles.statusSection}>
-                <Animated.View style={transcriptAnimatedStyle}>
-                  {transcript !== '' && (
-                    <View style={[styles.transcriptCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
-                      <Ionicons name="mic-outline" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                      <Text style={[styles.transcriptText, { color: colors.text }]} numberOfLines={3}>{transcript}</Text>
-                    </View>
-                  )}
-                </Animated.View>
-
-                <Animated.View style={replyAnimatedStyle}>
-                  {aiReply !== '' && (
-                    <View style={[styles.replyCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
-                      <View style={styles.replyHeader}>
-                        <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.replyAvatar}>
-                          <Ionicons name="sparkles" size={12} color="#fff" />
-                        </LinearGradient>
-                        <Text style={[styles.replyLabel, { color: colors.primary }]}>Sulti</Text>
-                      </View>
-                      <WordReveal text={aiReply} style={[styles.replyText, { color: colors.text }]} speed={25} />
-                    </View>
-                  )}
-                </Animated.View>
-
-                <Text style={[styles.statusText, {
-                  color: orbState === 'listening' ? '#EF4444' : orbState === 'speaking' ? colors.primary : orbState === 'thinking' ? colors.accent : colors.textLight,
-                }]}>
-                  {orbState === 'idle' && (hasSpoken ? 'Tap orb to continue' : 'Tap orb to speak')}
-                  {orbState === 'listening' && 'Listening... tap orb to finish'}
-                  {orbState === 'thinking' && 'Sulti is thinking...'}
-                  {orbState === 'speaking' && 'Sulti is speaking...'}
-                </Text>
-              </View>
+      <VoiceBackground>
+        {/* Top bar */}
+        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity onPress={endSession} style={styles.iconBtn} accessibilityLabel="Close voice mode">
+            <View style={styles.iconInner}>
+              <Ionicons name="chevron-down" size={22} color={voice.text} />
             </View>
-          ) : (
-            <View style={styles.conversationContainer}>
-              <FlatList
-                ref={listRef}
-                data={conversation}
-                keyExtractor={item => item.id}
-                contentContainerStyle={[styles.conversationList, { paddingTop: insets.top + 60, paddingBottom: 200 }]}
-                renderItem={({ item }) => (
-                  <View style={[styles.conversationItem, item.role === 'user' ? styles.userItem : styles.assistantItem]}>
-                    {item.role === 'assistant' && (
-                      <View style={styles.conversationAvatar}>
-                        <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
-                          <Ionicons name="sparkles" size={10} color="#fff" />
-                        </LinearGradient>
-                      </View>
-                    )}
-                    <View style={[styles.conversationBubble, {
-                      backgroundColor: item.role === 'user' ? colors.primary : colors.glassBg,
-                      borderColor: item.role === 'user' ? 'transparent' : colors.glassBorder,
-                    }]}>
-                      <Text style={[styles.conversationText, { color: item.role === 'user' ? '#fff' : colors.text }]}>
-                        {item.text}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-          )}
-
-          <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}>
-            {isRecording && (
-              <>
-                <View style={styles.recordingInfo}>
-                  <View style={styles.recordingDot} />
-                  <Text style={[styles.recordingTime, { color: colors.textSecondary }]}>{formatTime(recordingDuration)}</Text>
-                </View>
-                <View style={styles.voiceLevelContainer}>
-                  {renderWaveform()}
-                </View>
-                <View style={[styles.liveTranscriptCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
-                  <Ionicons name="mic" size={14} color="#EF4444" style={{ marginRight: 6 }} />
-                  <Text style={[styles.liveTranscriptText, { color: colors.text }]}>Listening...</Text>
-                </View>
-              </>
-            )}
-
-            {conversation.length > 0 && !isRecording && !isSpeakingRef.current && (
-              <TouchableOpacity
-                onPress={toggleRecording}
-                activeOpacity={0.8}
-                style={[styles.miniOrbBtn, { shadowColor: colors.primary }]}
-              >
-                <LinearGradient
-                  colors={[colors.orbGradient1 || colors.primary, colors.orbGradient2 || colors.secondary]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={styles.miniOrbGradient}
-                >
-                  <Ionicons name="mic" size={24} color="#fff" />
-                </LinearGradient>
-                <Text style={[styles.miniOrbLabel, { color: colors.textLight }]}>Tap to speak</Text>
-              </TouchableOpacity>
-            )}
-
-            {conversation.length > 0 && !isRecording && !isSpeakingRef.current && (
-              <TouchableOpacity
-                onPress={dismiss}
-                style={[styles.endSessionBtn, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close-circle-outline" size={18} color={colors.error} />
-                <Text style={[styles.endSessionText, { color: colors.error }]}>End Voice Session</Text>
-              </TouchableOpacity>
-            )}
+          </TouchableOpacity>
+          <View style={styles.topTitleWrap} accessibilityRole="header">
+            <Text style={styles.topTitle}>Hoy</Text>
+            <Text style={styles.topSubtitle}>Voice Tutor</Text>
           </View>
-        </Animated.View>
-      </AuroraBackground>
+          <TouchableOpacity
+            onPress={toggleLanguage}
+            style={[styles.iconBtn, styles.langBtn]}
+            accessibilityRole="button"
+            accessibilityLabel={`Language: ${language === 'bisaya' ? 'Bisaya' : 'English'}. Tap to switch.`}
+          >
+            <View style={styles.langInner}>
+              <Text style={styles.langFlag}>{language === 'bisaya' ? '🇵🇭' : '🇺🇸'}</Text>
+              <Text style={styles.langText}>{language === 'bisaya' ? 'Bisaya' : 'English'}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <XpToast visible={xpToastVisible} amount={15} streak={streak} offset={insets.top + 58} />
+
+        {/* Main content */}
+        {inConversation ? (
+          <View style={styles.convLayout}>
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.convOrbZone}>
+              <StatusPill state={orbState} />
+              <View style={styles.convOrb}>
+                <VoiceOrb state={orbState} size={ORB_TALK} amplitude={amplitude} onPress={toggleRecording} />
+              </View>
+            </Animated.View>
+            <FlatList
+              ref={listRef}
+              data={conversation}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.convList}
+              ListFooterComponent={orbState === 'thinking' ? <TypingIndicator /> : null}
+              onContentSizeChange={() => listRef.current && listRef.current.scrollToEnd({ animated: true })}
+              showsVerticalScrollIndicator={false}
+              accessibilityLabel="Conversation with Hoy"
+            />
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.introLayout}
+            showsVerticalScrollIndicator={false}
+          >
+            <StatusPill state={orbState} />
+            <View style={styles.introOrb}>
+              <VoiceOrb state={orbState} size={ORB_INTRO} amplitude={amplitude} onPress={toggleRecording} />
+            </View>
+            <Greeting visible />
+            <View style={styles.chipsWrap}>
+              <SuggestedChips onPick={onSuggestion} disabled={isThinking} />
+            </View>
+          </ScrollView>
+        )}
+
+        {/* Recording indicator */}
+        {recording && (
+          <View style={styles.recordingChip}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingText}>{formatTime(recordingDuration)} · tap orb to finish</Text>
+          </View>
+        )}
+
+        {/* Bottom controls */}
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 14 }]}>
+          <VoiceControls
+            onMic={toggleRecording}
+            onReplay={replayLast}
+            onToggleMute={toggleMute}
+            onToggleSlow={toggleSlow}
+            onOpenSettings={() => {
+              hapticTap();
+              setSettingsVisible(true);
+            }}
+            onEnd={endSession}
+            recording={recording}
+            muted={muted}
+            slowMode={slowMode}
+            canReplay={!!lastReplyRef.current}
+            disabled={isThinking}
+          />
+        </View>
+
+        <SettingsSheet
+          visible={settingsVisible}
+          onClose={() => setSettingsVisible(false)}
+          haptics={hapticsEnabled}
+          continuous={continuous}
+          slowMode={slowMode}
+          onHaptics={setHapticsEnabledState}
+          onContinuous={setContinuous}
+          onSlow={setSlowMode}
+        />
+      </VoiceBackground>
     </View>
   );
 }
 
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  overlay: { flex: 1 },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8, zIndex: 10 },
-  closeBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  closeBtnInner: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-  topTitle: { fontSize: 16, fontWeight: '700' },
-  continuousToggle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  mainContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  orbContainer: { alignItems: 'center', justifyContent: 'center' },
-  statusSection: { position: 'absolute', bottom: 140, left: 20, right: 20, alignItems: 'center', gap: 12 },
-  transcriptCard: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 16, padding: 14, borderWidth: 1, maxWidth: '85%' },
-  transcriptText: { fontSize: 15, lineHeight: 20, flex: 1, fontStyle: 'italic' },
-  replyCard: { borderRadius: 16, padding: 14, borderWidth: 1, maxWidth: '85%' },
-  replyHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 6 },
-  replyAvatar: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  replyLabel: { fontSize: 13, fontWeight: '700' },
-  replyText: { fontSize: 15, lineHeight: 22 },
-  statusText: { fontSize: 14, fontWeight: '500', letterSpacing: 0.3, marginTop: 4 },
-  conversationContainer: { flex: 1 },
-  conversationList: { paddingHorizontal: 16 },
-  conversationItem: { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end' },
-  userItem: { justifyContent: 'flex-end' },
-  assistantItem: { justifyContent: 'flex-start', gap: 6 },
-  conversationAvatar: { marginBottom: 2 },
-  conversationBubble: { maxWidth: '78%', borderRadius: 18, padding: 14, borderWidth: 1 },
-  conversationText: { fontSize: 15, lineHeight: 21 },
-  bottomSection: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', gap: 12 },
-  recordingInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  recordingTime: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  voiceLevelContainer: { height: 24, justifyContent: 'center', alignItems: 'center' },
-  endSessionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, borderWidth: 1 },
-  miniOrbBtn: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
-  miniOrbGradient: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
-  miniOrbLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.5, marginTop: 4 },
-  liveTranscriptCard: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1, marginHorizontal: 20 },
-  liveTranscriptText: { fontSize: 14, fontStyle: 'italic', flex: 1 },
-  endSessionText: { fontSize: 14, fontWeight: '600' },
+  topBar: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 8,
+  },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  iconInner: {
+    width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: voice.glass, borderWidth: 1, borderColor: voice.glassBorder,
+  },
+  langBtn: { width: 'auto', paddingHorizontal: 4 },
+  langInner: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999,
+    backgroundColor: voice.glass, borderWidth: 1, borderColor: voice.glassBorder,
+  },
+  langFlag: { fontSize: 13 },
+  langText: { color: voice.text, fontSize: 12, fontWeight: '700' },
+  topTitleWrap: { alignItems: 'center' },
+  topTitle: { color: voice.text, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  topSubtitle: { color: voice.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 1 },
+  introLayout: {
+    flexGrow: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 8, paddingVertical: 16,
+  },
+  introOrb: { alignItems: 'center', marginTop: 18, marginBottom: 8 },
+  chipsWrap: { marginTop: 16, width: '100%', alignItems: 'center' },
+  convLayout: { flex: 1 },
+  convOrbZone: { alignItems: 'center', paddingTop: 12 },
+  convOrb: { alignItems: 'center', marginTop: 6 },
+  convList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
+  recordingChip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingBottom: 4,
+  },
+  recordingDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: voice.danger,
+  },
+  recordingText: { color: voice.textSecondary, fontSize: 12, fontWeight: '600' },
+  bottomBar: { alignItems: 'center', paddingTop: 12 },
 });

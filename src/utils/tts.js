@@ -6,10 +6,23 @@ import { sanitizeForSpeech } from './speech';
 let player = null;
 let listener = null;
 let currentToken = 0;
+let muted = false;
 
 function getPlayer() {
   if (!player) player = createAudioPlayer(null);
   return player;
+}
+
+export function getAudioPlayer() {
+  return getPlayer();
+}
+
+export function setTTSMuted(value) {
+  muted = !!value;
+}
+
+export function isTTSMuted() {
+  return muted;
 }
 
 export function stopTTS() {
@@ -54,6 +67,12 @@ export function speakTTS(text, { voice = 'fil', rate = 0.9, language, onDone, on
       onDone();
     }
   };
+
+  if (muted) {
+    const simulatedMs = Math.min(3000, 500 + clean.length * 55);
+    setTimeout(() => finish(), simulatedMs);
+    return;
+  }
 
   api
     .ttsSynthesize(clean, voice, rate)

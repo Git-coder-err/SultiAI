@@ -129,7 +129,7 @@ function WaveformBar({ index }) {
   return <Animated.View style={style} />;
 }
 
-export default function HoyTutorScreen({ navigation }) {
+export default function HoyTutorScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const { addXp, hearts } = useGame();
   const insets = useSafeAreaInsets();
@@ -293,6 +293,14 @@ export default function HoyTutorScreen({ navigation }) {
     } catch (err) { addMessage('assistant', `Sorry: ${err.message}`); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    const situation = route?.params?.situation;
+    if (situation) {
+      pickSituation(situation);
+      navigation.setParams({ situation: undefined, label: undefined });
+    }
+  }, [route?.params?.situation]);
 
   const startRoleplay = async (rp) => {
     setShowRoleplay(false);
