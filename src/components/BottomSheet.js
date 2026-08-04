@@ -27,7 +27,7 @@ export default function BottomSheet({ visible, onClose, title, children, height 
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
+    <View style={styles.overlay} pointerEvents={visible ? 'auto' : 'none'}>
       <TouchableWithoutFeedback onPress={onClose}>
         <Animated.View style={[styles.backdrop, { backgroundColor: colors.overlay, opacity: backdropOpacity }]} />
       </TouchableWithoutFeedback>
@@ -43,8 +43,9 @@ export default function BottomSheet({ visible, onClose, title, children, height 
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, padding: spacing.xl, paddingTop: spacing.md },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, elevation: 9999 },
+  backdrop: { flex: 1, zIndex: 9998, elevation: 9998 },
+  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, padding: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xxxl, zIndex: 10000, elevation: 10000 },
   handleRow: { alignItems: 'center', marginBottom: spacing.md },
   handle: { width: 40, height: 4, borderRadius: 2 },
   title: { fontSize: 18, fontWeight: '700', marginBottom: spacing.lg, textAlign: 'center' },

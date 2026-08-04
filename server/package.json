@@ -20,6 +20,7 @@
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "mongoose": "^9.8.1",
+    "msedge-tts": "^2.0.7",
     "mysql2": "^3.23.2",
     "pg": "^8.22.0"
   },

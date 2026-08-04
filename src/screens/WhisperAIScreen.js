@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import * as Speech from 'expo-speech';
 import { useAudioRecorder, useAudioRecorderState, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { File } from 'expo-file-system';
 import Animated, {
@@ -17,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '../context/GameContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../services/api';
-import { sanitizeForSpeech } from '../utils/speech';
+import { speakTTS, stopTTS } from '../utils/tts';
 import GlassCard from '../components/GlassCard';
 import Badge from '../components/Badge';
 import AuroraBackground from '../components/AuroraBackground';
@@ -124,7 +123,7 @@ export default function WhisperAIScreen({ navigation }) {
   useEffect(() => {
     fadeIn.value = withTiming(1, { duration: 600 });
     slideUp.value = withSpring(0, { stiffness: 120, damping: 15 });
-    return () => { Speech.stop(); };
+    return () => { stopTTS(); };
   }, []);
 
   useEffect(() => {
@@ -227,7 +226,7 @@ export default function WhisperAIScreen({ navigation }) {
       tagalog: 'fil', cebuano: 'ceb', ilocano: 'ilo', hiligaynon: 'hil',
       bikol: 'bik', waray: 'war', kapampangan: 'pam', pangasinan: 'pag',
     };
-    Speech.speak(sanitizeForSpeech(text), { language: langMap[langId] || 'fil', rate: 0.8 });
+    speakTTS(text, { language: langMap[langId] || 'fil', rate: 0.8 });
   };
 
   const currentLang = selectedLanguage;

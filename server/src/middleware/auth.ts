@@ -24,6 +24,6 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  req.user = session;
+  req.user = { ...session, id: session.userId };
   next();
 }

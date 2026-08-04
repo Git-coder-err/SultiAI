@@ -26,8 +26,10 @@ router.get('/posts', authMiddleware, async (req: Request, res: Response) => {
       user_id: p.userId,
       title: p.title,
       content: p.content,
-      author: p.authorName,
+      author_name: p.authorName,
+      author_verified: p.authorVerified || false,
       created_at: p.createdAt,
+      likes: p.likes || 0,
     })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to get posts' });
@@ -98,7 +100,13 @@ router.post('/resources', authMiddleware, async (req: Request, res: Response) =>
 router.get('/posts/:postId/comments', authMiddleware, async (req: Request, res: Response) => {
   try {
     const comments = await getComments(Number(req.params.postId as string));
-    res.json(comments);
+    res.json(comments.map((c: any) => ({
+      comment_id: c.commentId,
+      post_id: c.postId,
+      author_name: c.authorName,
+      comment: c.comment,
+      created_at: c.createdAt,
+    })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to get comments' });
   }

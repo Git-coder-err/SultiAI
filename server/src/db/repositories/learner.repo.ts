@@ -1,5 +1,5 @@
 import { eq, or, and, sql } from 'drizzle-orm';
-import { getDb } from '../connection';
+import { getDb, getSqliteRaw } from '../connection';
 import * as schema from '../schema-sqlite';
 import { isMongoConnected } from '../mongodb/connection';
 import { LearnerProfile } from '../mongodb/learnerProfile.model';
@@ -169,7 +169,6 @@ export function getLearnerRepo() {
 }
 
 export async function getLeaderboard(period: string): Promise<any[]> {
-  const db = getDb();
   const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 365;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -186,7 +185,7 @@ export async function getLeaderboard(period: string): Promise<any[]> {
       })));
   }
 
-  const leaders = await (db as any).all(`
+  const leaders = await getSqliteRaw()!.prepare(`
     SELECT lp.user_id as id, u.fullname as name, u.username,
            lp.total_xp as xp, lp.streak,
            (SELECT COUNT(*) FROM daily_activity da WHERE da.user_id = lp.user_id AND da.activity_date >= ?) as active_days
@@ -195,23 +194,21 @@ export async function getLeaderboard(period: string): Promise<any[]> {
     WHERE lp.last_active >= ?
     ORDER BY lp.total_xp DESC
     LIMIT 50
-  `, [since, since]);
+  `).all(since, since);
   return leaders.map((l: any, i: number) => ({ ...l, rank: i + 1 }));
 }
 
 export async function addDailyReward(userId: number, reward: { xp: number; coins: number }): Promise<void> {
   const db = getDb();
   const today = new Date().toISOString().split('T')[0];
-  const existing = await (db as any).get(
-    'SELECT 1 FROM daily_activity WHERE user_id = ? AND activity_date = ?',
-    [userId, today]
-  );
+  const existing = getSqliteRaw()!.prepare(
+    'SELECT 1 FROM daily_activity WHERE user_id = ? AND activity_date = ?'
+  ).get(userId, today);
   if (existing) return; // already claimed today
 
-  await (db as any).run(
-    'INSERT INTO daily_activity (user_id, activity_date, xp_earned) VALUES (?, ?, ?)',
-    [userId, today, reward.xp]
-  );
+  getSqliteRaw()!.prepare(
+    'INSERT INTO daily_activity (user_id, activity_date, xp_earned) VALUES (?, ?, ?)'
+  ).run(userId, today, reward.xp);
   await (db as any).update(schema.learnerProfiles)
     .set({
       totalXp: sql`total_xp + ${reward.xp}`,

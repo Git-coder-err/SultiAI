@@ -9,6 +9,7 @@ server/data.json
 server/.env
 server/.expo/
 server/sultiai.db*
+server/audio-cache/
 
 # dependencies
 node_modules/

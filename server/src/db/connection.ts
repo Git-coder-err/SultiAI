@@ -33,11 +33,26 @@ function initDatabase() {
     `CREATE TABLE IF NOT EXISTS learning_progress (progress_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, module_id INTEGER NOT NULL, completion_percent REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (module_id) REFERENCES learning_modules(module_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS community_posts (post_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT, content TEXT, phrase TEXT, translation TEXT, category TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS comments (comment_id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, comment TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
-    `CREATE TABLE IF NOT EXISTS learner_profiles (profile_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, level TEXT DEFAULT 'beginner', strengths TEXT, weak_areas TEXT, common_mistakes TEXT, total_xp INTEGER DEFAULT 0, total_sessions INTEGER DEFAULT 0, last_active TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
+    `CREATE TABLE IF NOT EXISTS learner_profiles (profile_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, level TEXT DEFAULT 'beginner', strengths TEXT, weak_areas TEXT, common_mistakes TEXT, total_xp INTEGER DEFAULT 0, coins INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, daily_xp INTEGER DEFAULT 0, daily_goal INTEGER DEFAULT 50, total_sessions INTEGER DEFAULT 0, last_active TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS tutor_sessions (session_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, messages TEXT, summary TEXT, started_at TEXT DEFAULT (datetime('now')), ended_at TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
+    `CREATE TABLE IF NOT EXISTS daily_activity (activity_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, activity_date TEXT NOT NULL, xp_earned INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
+    `CREATE TABLE IF NOT EXISTS user_achievements (user_achievement_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, achievement_id TEXT NOT NULL, unlocked_at TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, UNIQUE(user_id, achievement_id))`,
+    `CREATE TABLE IF NOT EXISTS user_badges (user_badge_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, badge_id TEXT NOT NULL, earned_at TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, UNIQUE(user_id, badge_id))`,
   ];
   for (const sql of tables) {
     sqliteRaw.exec(sql);
+  }
+  const addColumnMigrations: Array<{ table: string; column: string; sql: string }> = [
+    { table: 'learner_profiles', column: 'coins', sql: 'ALTER TABLE learner_profiles ADD COLUMN coins INTEGER DEFAULT 0' },
+    { table: 'learner_profiles', column: 'streak', sql: 'ALTER TABLE learner_profiles ADD COLUMN streak INTEGER DEFAULT 0' },
+    { table: 'learner_profiles', column: 'daily_xp', sql: 'ALTER TABLE learner_profiles ADD COLUMN daily_xp INTEGER DEFAULT 0' },
+    { table: 'learner_profiles', column: 'daily_goal', sql: 'ALTER TABLE learner_profiles ADD COLUMN daily_goal INTEGER DEFAULT 50' },
+  ];
+  for (const m of addColumnMigrations) {
+    const cols = sqliteRaw.prepare(`PRAGMA table_info(${m.table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === m.column)) {
+      sqliteRaw.exec(m.sql);
+    }
   }
   const avatarRow = sqliteRaw.prepare('SELECT 1 FROM avatars WHERE avatar_id = 1').get();
   if (!avatarRow) {

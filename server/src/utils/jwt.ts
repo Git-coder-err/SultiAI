@@ -9,6 +9,7 @@ function base64url(text: string): string {
 export interface JwtPayload {
   email: string;
   userId: number;
+  id?: number;
   iat?: number;
   exp?: number;
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
@@ -75,19 +76,17 @@ export default function ProfileScreen({ navigation }) {
             <Avatar name={user?.name} uri={user?.avatar?.image} size={80} />
             <Text style={styles.name}>{user?.name || 'Learner'}</Text>
             <Text style={styles.email}>{user?.email || ''}</Text>
-            {user?.username && <Text style={styles.username}>@{user.username}</Text>}
+            {user?.username && <Text style={styles.username}>@{user.username.length > 12 ? user.username.slice(0, 12) + '...' : user.username}</Text>}
             <View style={styles.headerStats}>
-              <View style={styles.headerStat}>
+              <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.headerStatValue}>{xp}</Text>
-                <Text style={styles.headerStatLabel}>XP</Text>
+                <Text style={styles.headerStatValue}>{xp} XP</Text>
               </View>
-              <View style={styles.headerStat}>
+              <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="heart" size={16} color="#FF6B6B" />
-                <Text style={styles.headerStatValue}>{hearts}</Text>
-                <Text style={styles.headerStatLabel}>Hearts</Text>
+                <Text style={styles.headerStatValue}>{hearts} Hearts</Text>
               </View>
-              <View style={styles.headerStat}>
+              <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <StreakFlame streak={streak} />
               </View>
             </View>
@@ -101,11 +100,20 @@ export default function ProfileScreen({ navigation }) {
             )}
           </LinearGradient>
 
-          <View style={styles.tabRow}>
+          <View style={[styles.tabRow, { backgroundColor: colors.background }]}>
             {tabs.map((t) => (
-              <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && { backgroundColor: colors.primary + '20' }]} onPress={() => setActiveTab(t.key)}>
-                <Ionicons name={t.icon} size={18} color={activeTab === t.key ? colors.primary : colors.textLight} />
-                <Text style={[styles.tabText, { color: activeTab === t.key ? colors.primary : colors.textLight }]}>{t.label}</Text>
+              <TouchableOpacity
+                key={t.key}
+                style={[
+                  styles.tab,
+                  activeTab === t.key
+                    ? [styles.tabActive, { backgroundColor: colors.primary }]
+                    : { backgroundColor: isDark ? colors.surface : '#F1F5F9' },
+                ]}
+                onPress={() => setActiveTab(t.key)}
+              >
+                <Ionicons name={t.icon} size={18} color={activeTab === t.key ? '#fff' : colors.textSecondary} />
+                <Text style={[styles.tabText, { color: activeTab === t.key ? '#fff' : colors.textSecondary }]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -116,26 +124,26 @@ export default function ProfileScreen({ navigation }) {
                 <GlassCard variant="elevated" style={styles.statsGrid}>
                   <View style={styles.statRow}>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.primary }]}>{xp}</Text>
+                      <Text style={[styles.statNum, { color: colors.primary }]}>{savedPhrases.length}</Text>
+                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Words Learned</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNum, { color: colors.accent }]}>{xp}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total XP</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.accent }]}>{coins}</Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Coins</Text>
-                    </View>
-                    <View style={styles.statItem}>
                       <Text style={[styles.statNum, { color: colors.success }]}>{streak}</Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Streak</Text>
+                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Day Streak</Text>
                     </View>
                   </View>
                   <View style={styles.statRow}>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: '#FF6B6B' }]}>{hearts}</Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Hearts</Text>
+                      <Text style={[styles.statNum, { color: '#8B5CF6' }]}>{coins}</Text>
+                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Coins</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.primary }]}>{savedPhrases.length}</Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Saved</Text>
+                      <Text style={[styles.statNum, { color: '#FF6B6B' }]}>{hearts}</Text>
+                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Hearts</Text>
                     </View>
                     <View style={styles.statItem}>
                       <Text style={[styles.statNum, { color: colors.accent }]}>{badges.length}</Text>
@@ -239,7 +247,8 @@ export default function ProfileScreen({ navigation }) {
             )}
 
             {activeTab === 'settings' && (
-              <GlassCard>
+              <>
+                <GlassCard>
                 <TouchableOpacity style={styles.settingRow} onPress={toggleTheme}>
                   <View style={styles.settingLeft}>
                     <View style={[styles.settingIcon, { backgroundColor: colors.accent + '20' }]}>
@@ -282,12 +291,13 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={[styles.settingValue, { color: colors.textSecondary }]}>2.0.0</Text>
                 </View>
               </GlassCard>
-            )}
 
-            <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: colors.glassBg, borderColor: colors.error + '30' }]} onPress={handleSignOut}>
-              <Ionicons name="log-out-outline" size={20} color={colors.error} />
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: colors.glassBg, borderColor: colors.error + '30' }]} onPress={handleSignOut}>
+                  <Ionicons name="log-out-outline" size={20} color={colors.error} />
+                  <Text style={styles.signOutText}>Sign Out</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </ScrollView>
       </AuroraBackground>
@@ -297,20 +307,20 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { alignItems: 'center', paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl },
+  header: { alignItems: 'center', paddingBottom: spacing.xxxl, paddingHorizontal: spacing.xl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   name: { fontSize: 24, fontWeight: '700', color: '#fff', marginTop: spacing.md, letterSpacing: 0.36 },
   email: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4, letterSpacing: -0.24 },
   username: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2, letterSpacing: -0.08 },
-  headerStats: { flexDirection: 'row', gap: spacing.xxl, marginTop: spacing.lg },
-  headerStat: { alignItems: 'center', flexDirection: 'row', gap: 4 },
-  headerStatValue: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  headerStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.07 },
+  headerStats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, justifyContent: 'center' },
+  headerStatPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: borderRadius.full, gap: 6, backdropFilter: 'blur(8px)' },
+  headerStatValue: { fontSize: 14, fontWeight: '700', color: '#fff' },
   badgeRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md, alignItems: 'center' },
   moreBadges: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-  tabRow: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginTop: -spacing.lg, marginBottom: spacing.lg },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, backgroundColor: 'rgba(255,255,255,0.7)', gap: spacing.xs, ...shadows.sm },
+  tabRow: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginTop: spacing.xxxl, marginBottom: spacing.lg },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, gap: spacing.xs, ...shadows.sm },
+  tabActive: { shadowColor: '#0D9488', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   tabText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.07 },
-  content: { padding: spacing.xl, paddingTop: 0 },
+  content: { padding: spacing.xl, paddingTop: spacing.sm },
   statsGrid: { marginBottom: spacing.md },
   statRow: { flexDirection: 'row', marginBottom: spacing.md, gap: spacing.md },
   statItem: { flex: 1, alignItems: 'center' },

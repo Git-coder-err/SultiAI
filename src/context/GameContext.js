@@ -131,14 +131,17 @@ export function GameProvider({ children }) {
     addXp(achievement.xpReward || 100, 'achievement');
   };
 
-  const checkAchievements = ({ xp: currentXp, source }) => {
+  const checkAchievements = async ({ xp: currentXp, source }) => {
     if (currentXp >= 100) addAchievement({ id: 'first_100_xp', title: 'First Steps', description: 'Earn 100 XP', icon: 'star', xpReward: 50, coinReward: 20 });
     if (currentXp >= 1000) addAchievement({ id: 'thousand_xp', title: 'Century', description: 'Earn 1,000 XP', icon: 'trophy', xpReward: 200, coinReward: 100 });
     if (currentXp >= 5000) addAchievement({ id: 'five_thousand_xp', title: 'Dedicated', description: 'Earn 5,000 XP', icon: 'diamond', xpReward: 500, coinReward: 250 });
-    if (streak >= 3) addAchievement({ id: 'streak_3', title: 'Getting Started', description: '3-day streak', icon: 'flame', xpReward: 50, coinReward: 30 });
-    if (streak >= 7) addAchievement({ id: 'streak_7', title: 'Consistent', description: '7-day streak', icon: 'flame', xpReward: 100, coinReward: 50 });
-    if (streak >= 30) addAchievement({ id: 'streak_30', title: 'Unstoppable', description: '30-day streak', icon: 'flame', xpReward: 500, coinReward: 200 });
+    if (streak >= 3) addAchievement({ id: 'streak_3', title: 'Getting Started', description: '3-day streak', icon: 'sparkles', xpReward: 50, coinReward: 30 });
+    if (streak >= 7) addAchievement({ id: 'streak_7', title: 'Consistent', description: '7-day streak', icon: 'calendar', xpReward: 100, coinReward: 50 });
+    if (streak >= 30) addAchievement({ id: 'streak_30', title: 'Unstoppable', description: '30-day streak', icon: 'crown', xpReward: 500, coinReward: 200 });
     if (source === 'lesson' && dailyXp >= dailyGoal) addAchievement({ id: 'daily_goal', title: 'Goal Crusher', description: 'Reach daily goal', icon: 'target', xpReward: 50, coinReward: 25 });
+    try {
+      await api.checkAchievements({ xp: currentXp, streak, dailyXp, dailyGoal });
+    } catch {}
   };
 
   const syncToServer = async (data) => {

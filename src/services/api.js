@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-const BASE_URL = `http://${LOCALHOST}:3001`;
+export const BASE_URL = `http://${LOCALHOST}:3001`;
 
 async function getToken() {
   return AsyncStorage.getItem('auth_token');
@@ -57,6 +57,8 @@ export const api = {
     request('POST', '/api/speech/translate', { text, from, to }),
   transcribe: (audio, language) =>
     request('POST', '/api/speech/transcribe', { audio, language }),
+  ttsSynthesize: (text, voice, rate) =>
+    request('POST', '/api/speech/synthesize', { text, voice, rate }),
   analyzeNLP: (text) => request('POST', '/api/speech/nlp/analyze', { text }),
   detectLanguage: (text) => request('POST', '/api/speech/detect', { text }),
   checkPronunciation: (text) => request('POST', '/api/speech/pronunciation/check', { text }),
@@ -113,6 +115,7 @@ export const api = {
   // Achievements / Badges
   getAchievements: () => request('GET', '/api/achievements'),
   getBadges: () => request('GET', '/api/achievements/badges'),
+  checkAchievements: (stats) => request('POST', '/api/achievements/check', stats),
 
   // Vocabulary / Spaced Repetition
   getVocabularyReview: () => request('GET', '/api/vocabulary/review'),

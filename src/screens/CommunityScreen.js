@@ -8,13 +8,20 @@ import Header from '../components/Header';
 import Card from '../components/Card';
 import Avatar from '../components/Avatar';
 import Badge from '../components/Badge';
-import Button from '../components/Button';
+import BottomSheet from '../components/BottomSheet';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import { spacing, borderRadius, shadows } from '../theme';
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 export default function CommunityScreen({ navigation }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useUser();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +39,12 @@ export default function CommunityScreen({ navigation }) {
       const data = await api.getCommunityPosts();
       setPosts(Array.isArray(data) ? data : []);
     } catch {} finally {
-      setLoading(false);}
+      setLoading(false);
+    }
   };
 
   const handleCreatePost = async () => {
-    if (!newTitle.trim()) return Alert.alert('Error', 'Please enter a title');
+    if (!newTitle.trim()) return Alert.alert('Missing Title', 'Please enter a title for your post.');
     try {
       await api.createCommunityPost(newTitle, newContent);
       setShowCreate(false);
@@ -48,6 +56,12 @@ export default function CommunityScreen({ navigation }) {
     }
   };
 
+  const openCreateSheet = () => {
+    setNewTitle('');
+    setNewContent('');
+    setShowCreate(true);
+  };
+
   const toggleComments = async (postId) => {
     if (expandedPost === postId) {
       setExpandedPost(null);
@@ -56,7 +70,7 @@ export default function CommunityScreen({ navigation }) {
     setExpandedPost(postId);
     try {
       const data = await api.getPostComments(postId);
-      setComments(prev => ({ ...prev, [postId]: data }));
+      setComments((prev) => ({ ...prev, [postId]: data }));
     } catch {}
   };
 
@@ -66,7 +80,7 @@ export default function CommunityScreen({ navigation }) {
       await api.createPostComment(postId, newComment);
       setNewComment('');
       const data = await api.getPostComments(postId);
-      setComments(prev => ({ ...prev, [postId]: data }));
+      setComments((prev) => ({ ...prev, [postId]: data }));
     } catch {}
   };
 
@@ -75,31 +89,12 @@ export default function CommunityScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header title="Community" subtitle="Learn together">
-        <TouchableOpacity onPress={() => setShowCreate(!showCreate)} style={styles.headerBtn}>
-          <Ionicons name={showCreate ? 'close' : 'add'} size={24} color="#fff" />
+        <TouchableOpacity onPress={openCreateSheet} style={styles.headerBtn}>
+          <View style={[styles.headerBtnInner, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+            <Ionicons name="add" size={24} color="#fff" />
+          </View>
         </TouchableOpacity>
       </Header>
-
-      {showCreate && (
-        <Card style={styles.createCard}>
-          <TextInput
-            style={[styles.createInput, { color: colors.text, borderColor: colors.border }]}
-            placeholder="Post title..."
-            placeholderTextColor={colors.textLight}
-            value={newTitle}
-            onChangeText={setNewTitle}
-          />
-          <TextInput
-            style={[styles.createInput, styles.createBody, { color: colors.text, borderColor: colors.border }]}
-            placeholder="Share a phrase, tip, or question..."
-            placeholderTextColor={colors.textLight}
-            value={newContent}
-            onChangeText={setNewContent}
-            multiline
-          />
-          <Button title="Share with Community" onPress={handleCreatePost} size="sm" gradient />
-        </Card>
-      )}
 
       <FlatList
         data={posts}
@@ -110,15 +105,21 @@ export default function CommunityScreen({ navigation }) {
             <View style={styles.postHeader}>
               <Avatar name={item.author_name || item.author?.name} size={36} />
               <View style={styles.postAuthor}>
-                <Text style={[styles.authorName, { color: colors.text }]}>{item.author_name || item.author?.name || 'Anonymous'}</Text>
+                <Text style={[styles.authorName, { color: colors.text }]}>
+                  {item.author_name || item.author?.name || 'Anonymous'}
+                </Text>
                 <Text style={[styles.postDate, { color: colors.textLight }]}>
-                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                  {formatDate(item.created_at)}
                 </Text>
               </View>
-              {item.author_verified && <Badge icon="shield-checkmark" title="Native" variant="success" size="sm" />}
+              {item.author_verified && (
+                <Badge icon="shield-checkmark" title="Native" variant="success" size="sm" />
+              )}
             </View>
             <Text style={[styles.postTitle, { color: colors.text }]}>{item.title}</Text>
-            {item.content && <Text style={[styles.postContent, { color: colors.textSecondary }]}>{item.content}</Text>}
+            {item.content && (
+              <Text style={[styles.postContent, { color: colors.textSecondary }]}>{item.content}</Text>
+            )}
             <View style={styles.postActions}>
               <TouchableOpacity onPress={() => toggleComments(item.id)} style={styles.actionRow}>
                 <Ionicons name="chatbubble-outline" size={18} color={colors.textLight} />
@@ -135,14 +136,25 @@ export default function CommunityScreen({ navigation }) {
                   <View key={i} style={styles.commentRow}>
                     <Avatar name={c.author_name} size={24} />
                     <View style={styles.commentContent}>
-                      <Text style={[styles.commentAuthor, { color: colors.text }]}>{c.author_name || 'Anonymous'}</Text>
-                      <Text style={[styles.commentText, { color: colors.textSecondary }]}>{c.comment}</Text>
+                      <Text style={[styles.commentAuthor, { color: colors.text }]}>
+                        {c.author_name || 'Anonymous'}
+                      </Text>
+                      <Text style={[styles.commentText, { color: colors.textSecondary }]}>
+                        {c.comment}
+                      </Text>
                     </View>
                   </View>
                 ))}
                 <View style={styles.commentInputRow}>
                   <TextInput
-                    style={[styles.commentInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceSecondary }]}
+                    style={[
+                      styles.commentInput,
+                      {
+                        color: colors.text,
+                        borderColor: isDark ? colors.border : colors.border,
+                        backgroundColor: isDark ? colors.surface : colors.surfaceSecondary,
+                      },
+                    ]}
                     placeholder="Add a comment..."
                     placeholderTextColor={colors.textLight}
                     value={newComment}
@@ -157,9 +169,56 @@ export default function CommunityScreen({ navigation }) {
           </Card>
         )}
         ListEmptyComponent={
-          <EmptyState icon="people" title="No posts yet" message="Be the first to share something with the community!" actionLabel="Create Post" onAction={() => setShowCreate(true)} />
+          <EmptyState
+            icon="people"
+            title="No posts yet"
+            message="Be the first to share something with the community!"
+            actionLabel="Create Post"
+            onAction={openCreateSheet}
+          />
         }
       />
+
+      <BottomSheet visible={showCreate} onClose={() => setShowCreate(false)} title="Create Post" height={360}>
+        <TextInput
+          style={[
+            styles.sheetInput,
+            {
+              color: colors.text,
+              borderColor: isDark ? '#334155' : colors.border,
+              backgroundColor: isDark ? colors.surface : colors.surfaceSecondary,
+            },
+          ]}
+          placeholder='Title (e.g. "How to use Lagi?")'
+          placeholderTextColor={colors.textLight}
+          value={newTitle}
+          onChangeText={setNewTitle}
+        />
+        <TextInput
+          style={[
+            styles.sheetInput,
+            styles.sheetBody,
+            {
+              color: colors.text,
+              borderColor: isDark ? '#334155' : colors.border,
+              backgroundColor: isDark ? colors.surface : colors.surfaceSecondary,
+            },
+          ]}
+          placeholder="Write your post or ask a question..."
+          placeholderTextColor={colors.textLight}
+          value={newContent}
+          onChangeText={setNewContent}
+          multiline
+        />
+        <TouchableOpacity
+          style={[styles.sheetSubmit, { backgroundColor: colors.primary }]}
+          onPress={handleCreatePost}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="paper-plane" size={18} color="#fff" />
+          <Text style={styles.sheetSubmitText}>Share with Community</Text>
+        </TouchableOpacity>
+      </BottomSheet>
     </View>
   );
 }
@@ -167,9 +226,7 @@ export default function CommunityScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerBtn: { padding: spacing.sm },
-  createCard: { margin: spacing.xl, marginTop: 0, marginBottom: spacing.md },
-  createInput: { borderWidth: 1.5, borderRadius: borderRadius.sm, padding: spacing.md, marginBottom: spacing.md, fontSize: 15 },
-  createBody: { minHeight: 80, textAlignVertical: 'top' },
+  headerBtnInner: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   list: { padding: spacing.xl, paddingTop: 0 },
   postCard: { marginBottom: spacing.md },
   postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
@@ -188,4 +245,8 @@ const styles = StyleSheet.create({
   commentText: { fontSize: 13, marginTop: 2, lineHeight: 18 },
   commentInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   commentInput: { flex: 1, borderWidth: 1.5, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 13 },
+  sheetInput: { borderWidth: 1.5, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md, fontSize: 15 },
+  sheetBody: { minHeight: 100, textAlignVertical: 'top' },
+  sheetSubmit: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: borderRadius.lg, paddingVertical: 14, gap: spacing.sm, marginTop: spacing.sm, ...shadows.md },
+  sheetSubmitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
