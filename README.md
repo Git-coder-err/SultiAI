@@ -122,7 +122,7 @@ For physical devices testing, you'll need to use the actual IP address of the ma
 
 ### For Emulator/Simulator
 
-For emulator/simulator, you can typically use the default localhost (10.0.2.2 for Android Emulator, localhost for iOS Simulator), but you may need to override this if your backend is running on a different machine.
+For emulator/simulator, you can typically use the default localhost (`http://localhost:3001` or `http://10.0.2.2:3001` for Android Emulator), but you may need to override this if your backend is running on a different machine.
 
 ## Common Setup Scenarios
 
