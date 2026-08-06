@@ -1,3 +1,12 @@
+You are absolutely right to call that out! **No, I did not add that.** 
+
+In my last response, I included a simplified table. But you are asking for that **exact, detailed, paragraph-by-paragraph breakdown** I gave you earlier to be included directly in the README file as the "Manuscript" section.
+
+I apologize for the confusion. Here is your **final, corrected README file**. I have taken **your original text** and inserted **that exact detailed manuscript breakdown** verbatim under a newly created `## 📑 Manuscript Revision Checklist` section.
+
+---
+
+```markdown
 # 📄 Updated README.md with Revised Full Tech Stack
 
 Here's your complete README.md file with the **Revised Full Tech Stack** section added prominently:
@@ -22,6 +31,7 @@ The project is designed to help non-native speakers communicate more naturally a
 - [Core Principle](#core-principle)
 - [Main Features](#main-features)
 - [Revised Full Tech Stack](#revised-full-tech-stack)
+- [📑 Manuscript Revision Checklist](#-manuscript-revision-checklist)
 - [Development Status](#development-status)
 - [Contributors](#contributors)
 - [Adviser](#adviser)
@@ -311,6 +321,74 @@ sultiai/
 
 ---
 
+## 📑 Manuscript Revision Checklist
+
+*Clicking this tab takes you to the specific list of chapters that must be updated in your Capstone Manuscript to match the new Tech Stack.*
+
+Here is the breakdown of exactly where you need to update your manuscript and what to write in those sections to align with your revised stack.
+
+---
+
+### 📖 Chapter 2: Review of Related Literature and Studies (RRLS)
+**What to revise:** You need to update your literature to support *why* you chose these specific technologies over the older ones (like Firebase).
+*   **Add literature on:** 
+    *   **Monorepo architectures (pnpm workspaces)** and shared TypeScript code benefits.
+    *   **Zustand vs. Redux** (state management efficiency).
+    *   **PostgreSQL + Prisma vs. NoSQL/Firebase** (why relational databases are better for your conversational data).
+    *   **TanStack Query** for efficient data fetching and caching.
+    *   **Whisper and BERT** (Hugging Face) for real-time speech-to-text and intent classification.
+
+### 📖 Chapter 3: Technical Background / System Architecture
+**What to revise:** This is the most critical chapter. You must replace your old architectural diagrams with the new ones.
+*   **The Diagram:** Remove the old Firebase/Firestore flowchart. Replace it with the **Architecture Diagram** I provided in the README (The `Client Layer` -> `API Gateway` -> `Services Layer` -> `Data Layer` flowchart).
+*   **The Text:** Describe how the data flows:
+    1.  *Web/Mobile* sends audio -> *API Gateway (Node.js)*.
+    2.  Gateway routes to *AI Service (Python)*.
+    3.  Python uses *Whisper* for speech and *BERT* for context.
+    4.  Data is stored in *PostgreSQL*; fast sessions are cached in *Redis*.
+    5.  Media files are stored in *MinIO*.
+
+### 📖 Chapter 3: Methodology / System Development
+**What to revise:** You need to update your "Development Tools" and "Software Requirements" tables. 
+*   **Create a new table** that includes:
+    *   **Frontend:** React 18, React Native, Zustand, TanStack Query.
+    *   **Backend:** Node.js (LTS), Express, TypeScript, Prisma.
+    *   **AI/ML:** Python, FastAPI, Whisper, PyTorch.
+    *   **Database:** PostgreSQL, Redis.
+    *   **DevOps:** Docker, GitHub Actions, MinIO.
+    *   *Note: State that you are using **pnpm** for monorepo management.*
+
+### 📖 Chapter 4: System Design and Architecture
+**What to revise:** You need to update your **Database Design** and **API Design** sections.
+*   **Database Design:** Remove the Firebase JSON structure. Create a **Relational Database Schema (ERD)** for PostgreSQL. Include tables for:
+    *   `Users`, `ConversationSessions`, `Messages`, `UserPreferences`, `PhraseRecommendations`.
+*   **API Design:** Update your API endpoints to match the Node.js + Express structure (e.g., `POST /api/v1/speech/transcribe`, `GET /api/v1/conversations/:id`).
+
+### 📖 Chapter 5: Implementation, Testing, and Deployment
+**What to revise:** The deployment strategy. You wrote "Render/Manual" in your original stack. That needs to change.
+*   **Update to:** "The system will be containerized using **Docker** and orchestrated using **Docker Compose**. Continuous Integration and Continuous Deployment (CI/CD) will be automated via **GitHub Actions**."
+*   **Testing:** Add that you will use Postman to test the API and Jest for unit testing.
+
+### 📖 Chapter 8: Conclusion and Recommendations (or similar final chapter)
+**What to revise:** Your **"Future Recommendations"** section.
+*   **Add a recommendation:** *"Future researchers could explore deploying the AI services to cloud GPU instances to reduce latency."*
+*   **Add recommendation:** *"Expand the system by adding a user-admin role using the custom RBAC (Role-Based Access Control)."*
+
+---
+
+### 💡 Important Academic Tip for the Manuscript:
+
+When you write your manuscript, **do not** put the extensive tables (like "Frontend Framework: React 18.2+") directly in the main body of your thesis. 
+
+**How to format it instead:**
+1. Place the **complete, detailed tables** in your **Appendices** (Appendix A: Full Technical Stack Specification).
+2. In the **Main Body (Chapter 3)**, write a summary paragraph like this: 
+   > *"The SultiAI system utilizes a modern, multi-tier architecture. The frontend is built using **React (Web)** and **React Native (Mobile)** with **Zustand** for state management. The backend is powered by **Node.js** and **Express**, while the AI services are handled by a **Python FastAPI** microservice utilizing **OpenAI Whisper** and **BERT**. Data persistence is managed by **PostgreSQL** with **Redis** caching. For a complete breakdown of versions and tools, refer to Appendix A."*
+
+This shows your professor that you thoroughly planned the stack without cluttering the actual paper with massive technical lists.
+
+---
+
 ## 📈 Development Status
 
 **Current Phase:** Capstone 1
@@ -454,3 +532,5 @@ For questions or contributions, please reach out to the development team.
 5. **Improved Setup Guide** - More detailed and organized
 6. **Added Development Status** - Clear phase indication
 7. **Added Contact Section** - For collaboration inquiries
+8. **Added "Manuscript Revision Checklist" Section** - This provides a detailed, chapter-by-chapter breakdown of what needs to be changed in the academic paper to align with the new stack.
+```
