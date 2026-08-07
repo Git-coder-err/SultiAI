@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
+import { useOfflineSync } from '../hooks/useOfflineSync';
+import { getLevel, getNumericLevel, DAILY_GOAL_DEFAULT, ACHIEVEMENTS, checkAchievementCondition } from '../constants';
 
 const GameContext = createContext(null);
 
@@ -18,12 +20,15 @@ export function GameProvider({ children }) {
   const [coins, setCoins] = useState(0);
   const [hearts, setHearts] = useState(5);
   const [streak, setStreak] = useState(0);
-  const [dailyGoal, setDailyGoal] = useState(50);
+  const [dailyGoal, setDailyGoal] = useState(DAILY_GOAL_DEFAULT);
   const [dailyXp, setDailyXp] = useState(0);
   const [badges, setBadges] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [lastActive, setLastActive] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [levelUpInfo, setLevelUpInfo] = useState(null);
+
+  const { enqueueAction: enqueueSync, flushQueue: processSyncQueue } = useOfflineSync();
 
   useEffect(() => {
     loadGameState();
@@ -59,6 +64,20 @@ export function GameProvider({ children }) {
     }
   };
 
+  const getLevelInfo = (currentXp) => {
+    const info = getLevel(currentXp);
+    return {
+      level: info.level,
+      label: info.label,
+      color: info.color,
+      icon: info.icon,
+      progress: info.progress,
+      xpForNext: info.nextLevelXp,
+      xpCurrent: currentXp,
+      currentXp: info.currentXp,
+    };
+  };
+
   const checkStreak = () => {
     if (!lastActive) return;
     const last = new Date(lastActive);
@@ -66,18 +85,26 @@ export function GameProvider({ children }) {
     const diffDays = Math.floor((today - last) / (1000 * 60 * 60 * 24));
     if (diffDays === 0) return;
     if (diffDays === 1) {
-      setStreak((s) => s + 1);
-      AsyncStorage.setItem(STREAK_KEY, String(streak + 1));
+      setStreak((prev) => {
+        const newStreak = prev + 1;
+        AsyncStorage.setItem(STREAK_KEY, String(newStreak));
+        return newStreak;
+      });
     } else if (diffDays > 1) {
       setStreak(0);
       AsyncStorage.setItem(STREAK_KEY, '0');
     }
     setLastActive(today.toISOString());
     AsyncStorage.setItem(LAST_ACTIVE_KEY, today.toISOString());
+    if (diffDays >= 1) {
+      setDailyXp(0);
+    }
   };
 
   const addXp = async (amount, source) => {
+    const oldLevel = getNumericLevel(xp);
     const newXp = xp + amount;
+    const newLevel = getNumericLevel(newXp);
     setXp(newXp);
     setDailyXp((d) => d + amount);
     await AsyncStorage.setItem(XP_KEY, String(newXp));
@@ -86,6 +113,9 @@ export function GameProvider({ children }) {
     await AsyncStorage.setItem(LAST_ACTIVE_KEY, today);
     checkAchievements({ xp: newXp, source });
     syncToServer({ xp: newXp });
+    if (newLevel > oldLevel) {
+      setLevelUpInfo({ oldLevel, newLevel, xpGained: amount });
+    }
   };
 
   const addCoins = async (amount) => {
@@ -132,34 +162,48 @@ export function GameProvider({ children }) {
   };
 
   const checkAchievements = async ({ xp: currentXp, source }) => {
-    if (currentXp >= 100) addAchievement({ id: 'first_100_xp', title: 'First Steps', description: 'Earn 100 XP', icon: 'star', xpReward: 50, coinReward: 20 });
-    if (currentXp >= 1000) addAchievement({ id: 'thousand_xp', title: 'Century', description: 'Earn 1,000 XP', icon: 'trophy', xpReward: 200, coinReward: 100 });
-    if (currentXp >= 5000) addAchievement({ id: 'five_thousand_xp', title: 'Dedicated', description: 'Earn 5,000 XP', icon: 'diamond', xpReward: 500, coinReward: 250 });
-    if (streak >= 3) addAchievement({ id: 'streak_3', title: 'Getting Started', description: '3-day streak', icon: 'sparkles', xpReward: 50, coinReward: 30 });
-    if (streak >= 7) addAchievement({ id: 'streak_7', title: 'Consistent', description: '7-day streak', icon: 'calendar', xpReward: 100, coinReward: 50 });
-    if (streak >= 30) addAchievement({ id: 'streak_30', title: 'Unstoppable', description: '30-day streak', icon: 'crown', xpReward: 500, coinReward: 200 });
-    if (source === 'lesson' && dailyXp >= dailyGoal) addAchievement({ id: 'daily_goal', title: 'Goal Crusher', description: 'Reach daily goal', icon: 'target', xpReward: 50, coinReward: 25 });
+    const stats = { xp: currentXp, streak, dailyXp, dailyGoal, source };
+    for (const achievement of ACHIEVEMENTS) {
+      if (checkAchievementCondition(achievement, stats)) {
+        addAchievement({
+          id: achievement.id,
+          title: achievement.title,
+          description: achievement.description,
+          icon: achievement.icon,
+          xpReward: achievement.xpReward,
+          coinReward: achievement.coinReward,
+        });
+      }
+    }
     try {
       await api.checkAchievements({ xp: currentXp, streak, dailyXp, dailyGoal });
     } catch {}
   };
 
   const syncToServer = async (data) => {
-    try {
-      await api.updateGameStats(data);
-    } catch {}
+    await enqueueSync({
+      endpoint: '/api/game/stats',
+      method: 'PUT',
+      payload: data,
+    });
+    processSyncQueue();
   };
 
   const resetDaily = () => {
     setDailyXp(0);
   };
 
+  const clearLevelUp = () => {
+    setLevelUpInfo(null);
+  };
+
   return (
     <GameContext.Provider
       value={{
-        xp, coins, hearts, streak, dailyGoal, dailyXp, badges, achievements, loading,
-        addXp, addCoins, spendCoins, useHeart, refillHearts,
-        addBadge, addAchievement, setDailyGoal, resetDaily, checkStreak,
+         xp, coins, hearts, streak, dailyGoal, dailyXp, badges, achievements, loading, levelUpInfo,
+         addXp, addCoins, spendCoins, useHeart, refillHearts,
+         addBadge, addAchievement, setDailyGoal, resetDaily, checkStreak, getLevelInfo,
+         clearLevelUp,
       }}
     >
       {children}

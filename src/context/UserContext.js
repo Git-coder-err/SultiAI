@@ -29,20 +29,22 @@ export function UserProvider({ children }) {
 
   const signIn = async (email, password) => {
     const res = await api.signIn(email, password);
-    await AsyncStorage.setItem('auth_token', res.token);
-    setToken(res.token);
-    setUser(res.user);
+    await AsyncStorage.setItem('auth_token', res.accessToken);
+    setToken(res.accessToken);
+    setUser(await api.getProfile());
   };
 
   const signUp = async (email, password, name, native_language, target_language) => {
     const res = await api.signUp(email, password, name, native_language, target_language);
-    await AsyncStorage.setItem('auth_token', res.token);
-    setToken(res.token);
-    setUser(res.user);
+    await AsyncStorage.setItem('auth_token', res.accessToken);
+    setToken(res.accessToken);
+    setUser(await api.getProfile());
   };
 
   const signOut = async () => {
-    await AsyncStorage.removeItem('auth_token');
+    try {
+      await AsyncStorage.removeItem('auth_token');
+    } catch {}
     setToken(null);
     setUser(null);
   };

@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-SultiAI is a **Bisaya (Cebuano) language learning mobile application** built with React Native (Expo SDK 56) backed by an Express + Groq AI server. It features a named AI tutor ("Hoy!"), voice-based pronunciation feedback, adaptive learner profiling, situation-based lessons, and gamification (XP, levels, session tracking). The app targets English speakers learning Bisaya, leveraging Groq's LLaMA 3.3-70B for chat, Whisper for transcription, and a custom NLP pipeline.
+SultiAI is a **Bisaya (Cebuano) language learning mobile application** built with React Native (Expo SDK 56) backed by an Express + Groq AI server. It features a named AI tutor ("SULTI!"), voice-based pronunciation feedback, adaptive learner profiling, situation-based lessons, and gamification (XP, levels, session tracking). The app targets English speakers learning Bisaya, leveraging Groq's LLaMA 3.3-70B for chat, Whisper for transcription, and a custom NLP pipeline.
 
 ---
 
@@ -11,7 +11,7 @@ SultiAI is a **Bisaya (Cebuano) language learning mobile application** built wit
 | Feature | Duolingo | Rosetta Stone | Babbel | **SultiAI (Current)** | **SultiAI (Innovation)** |
 |---|---|---|---|---|---|---|
 | Target Language | 40+ languages | 24 languages | 14 languages | **Bisaya only** | **Bisaya + AI preservation of endangered dialects** ⭐ |
-| Tutor | Gamified UI | Static lessons | Static lessons | **AI chat tutor "Hoy!"** | **Adaptive tutor with learner profiling** |
+| Tutor | Gamified UI | Static lessons | Static lessons | **AI chat tutor "SULTI!"** | **Adaptive tutor with learner profiling** |
 | Pronunciation | Basic mic exercises | Speech recognition | None | **Groq Whisper + phoneme feedback** | **Pronunciation feedback with phoneme breakdown** |
 | Cultural Context | Generic | Some cultural notes | Some cultural notes | **Cultural notes per lesson** | **AR cultural scenario (MVP)** 🚧 |
 | Offline Mode | Limited | Paid download | Paid download | None | **Offline adaptive mode (cached + sync)** 🚧 |
@@ -149,7 +149,7 @@ Innovations are classified into **Core** (fully implemented and demonstrable) an
 
 ### Phase 0: Cleanup & Architecture (Week 1)
 
-1. **Remove dead screens** — Delete unused AIChatScreen.js (legacy duplicate of HoyTutorScreen)
+1. **Remove dead screens** — Delete unused AIChatScreen.js (legacy duplicate of SultiTutorScreen)
 2. **Consolidate API routes** — Remove duplicate Express mount points; single source of truth per resource
 3. **Add testing framework** — Jest configuration for server unit tests
 
@@ -178,7 +178,7 @@ Innovations are classified into **Core** (fully implemented and demonstrable) an
 
 SultiAI is already a **functional, full-stack language learning application** with unique advantages:
 - **Bisaya-only focus** (no competitor owns this niche)
-- **AI-powered tutor "Hoy!"** with Groq LLaMA integration
+- **AI-powered tutor "SULTI!"** with Groq LLaMA integration
 - **Voice + pronunciation feedback** via Groq Whisper
 - **Adaptive learning** with level progression (Sugod → Tunga → Abante)
 - **Multi-database backend** with proper repository pattern

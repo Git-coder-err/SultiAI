@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
+import { useOfflineSync } from '../hooks/useOfflineSync';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
@@ -45,6 +46,7 @@ const formatEarnedDate = (iso) => {
 export default function AchievementsScreen({ navigation }) {
   const { colors } = useTheme();
   const { xp, streak, dailyXp, dailyGoal, badges } = useGame();
+  const { enqueueAction } = useOfflineSync();
 
   const earnedById = {};
   badges.forEach((b) => { earnedById[b.id] = b; });

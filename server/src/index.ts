@@ -4,7 +4,15 @@ import cors from 'cors';
 import path from 'path';
 import { connect, closeAll } from './db/connection';
 import { connectMongo, closeMongo } from './db/mongodb/connection';
-import { errorHandler } from './middleware/error';
+import { errorHandler, notFoundHandler } from './middleware/error';
+import { isGroqConfigured } from './utils/groq';
+import { isLocalLLMReady, ensureLocalLLM, getLocalLLMError } from './services/localLLM';
+import { isLocalSTTReady, ensureLocalSTT, getLocalSTTError } from './services/sttService';
+import { env, validateEnv } from './config';
+import { setSecurityHeaders, configureCors } from './middleware/security';
+import { globalRateLimit } from './middleware/rateLimit';
+import { requestLogger } from './middleware/logging';
+import logger from './utils/logger';
 
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
@@ -24,22 +32,35 @@ import analyticsRoutes from './routes/analytics.routes';
 import preservationRoutes from './routes/preservation.routes';
 import arRoutes from './routes/ar.routes';
 import whisperRoutes from './routes/whisper.routes';
+import agentRoutes from './routes/agent.routes';
+import vocabularyIntelligenceRoutes from './routes/vocabulary.routes';
+import pronunciationIntelligenceRoutes from './routes/pronunciation.routes';
+import recommendationRoutes from './routes/recommendation.routes';
+import notificationPreferencesRoutes from './routes/notificationPreferences.routes';
 import { authMiddleware } from './middleware/auth';
-import { isGroqConfigured, groqChat } from './utils/groq';
-import { buildSultiPrompt } from './utils/prompts';
-import { getUserIdByEmail } from './db/repositories/conversation.repo';
-
-const PORT = parseInt(process.env.PORT || '3001', 10);
+import { buildSultiPrompt, buildCharacterPrompt } from './utils/prompts';
+import { success, errors } from './utils/apiResponse';
 
 const app = express();
 
-app.use(cors({ origin: '*', allowedHeaders: 'Content-Type,Authorization', methods: 'GET,POST,PUT,DELETE,OPTIONS' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(cors({ origin: configureCors, allowedHeaders: ['Content-Type', 'Authorization'], methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
+app.use(express.json({ limit: env.MAX_REQUEST_SIZE }));
+app.use(setSecurityHeaders);
+app.use(requestLogger);
+app.use(globalRateLimit);
 
-app.use('/audio/tts', express.static(path.join(process.cwd(), 'audio-cache')));
+app.use('/audio/tts', express.static(path.join(process.cwd(), env.AUDIO_CACHE_DIR)));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  success(res, {
+    status: 'ok',
+    groq: isGroqConfigured() ? 'configured' : 'not_set',
+    localLLM: isLocalLLMReady() ? 'ready' : 'initializing',
+    localLLMError: getLocalLLMError(),
+    localSTT: isLocalSTTReady() ? 'ready' : 'initializing',
+    localSTTError: getLocalSTTError(),
+    mode: isGroqConfigured() ? 'api' : (isLocalLLMReady() ? 'local' : 'none'),
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -61,38 +82,48 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/preservation', preservationRoutes);
 app.use('/api/ar', arRoutes);
 app.use('/api/whisper', whisperRoutes);
+app.use('/api/agent', agentRoutes);
+app.use('/api/v2/vocabulary', vocabularyIntelligenceRoutes);
+app.use('/api/v2/pronunciation', pronunciationIntelligenceRoutes);
+app.use('/api/v2/recommendations', recommendationRoutes);
+app.use('/api/v2/notifications/preferences', notificationPreferencesRoutes);
 
 app.post('/api/assistant/chat', authMiddleware, async (req, res) => {
   try {
-    const { message, language } = req.body || {};
+    const { message, character } = req.body || {};
     if (!message) {
-      res.status(400).json({ error: 'Message is required' });
+      errors.validation(res, 'Message is required');
       return;
     }
-    if (!isGroqConfigured()) {
-      res.status(500).json({ error: 'Groq API key not configured' });
+    const { isConfigured, groqChat } = await import('./utils/groq');
+    if (!isConfigured()) {
+      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY or enable local LLM model');
       return;
     }
+    const systemPrompt = character
+      ? buildCharacterPrompt(character, `The learner's native language is English.`)
+      : buildSultiPrompt('chat', `The learner's native language is English.`);
     const reply = await groqChat([
-      { role: 'system', content: buildSultiPrompt('chat') },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: message },
     ], { temperature: 0.9, maxTokens: 800 });
-    res.json({ reply });
+    success(res, { reply }, 'Chat response generated');
   } catch (err) {
-    console.error('Assistant chat error:', err);
-    res.status(500).json({ error: 'AI request failed' });
+    logger.error('Assistant chat error', { error: (err as Error).message });
+    errors.internal(res, 'AI request failed');
   }
 });
 
 app.post('/api/groq', authMiddleware, async (req, res) => {
   try {
     const { messages, nativeLanguage } = req.body || {};
-    if (!isGroqConfigured()) {
-      res.status(500).json({ error: 'Groq API key not configured' });
+    const { isConfigured, groqChat } = await import('./utils/groq');
+    if (!isConfigured()) {
+      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY or enable local LLM model');
       return;
     }
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      res.status(400).json({ error: 'Messages must be a non-empty array' });
+      errors.validation(res, 'Messages must be a non-empty array');
       return;
     }
     const systemPrompt = buildSultiPrompt('chat', `The learner's native language is ${nativeLanguage || 'English'}.`);
@@ -100,31 +131,59 @@ app.post('/api/groq', authMiddleware, async (req, res) => {
       { role: 'system', content: systemPrompt },
       ...messages.map((m: any) => ({ role: m.type === 'user' ? 'user' as const : 'assistant' as const, content: m.text })),
     ], { temperature: 0.8, maxTokens: 600 });
-    res.json({ content: reply });
+    success(res, { content: reply }, 'Response generated');
   } catch (err) {
-    console.error('Groq error:', err);
-    res.status(500).json({ error: 'Groq API request failed' });
+    logger.error('Groq error', { error: (err as Error).message });
+    errors.internal(res, 'AI request failed');
   }
 });
 
+app.use(notFoundHandler);
 app.use(errorHandler);
 
 async function start() {
   try {
+    validateEnv();
     connect();
     await connectMongo();
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    if (!isGroqConfigured()) {
+      logger.info('Initializing local LLM model...');
+      try {
+        await ensureLocalLLM();
+        logger.info('Local LLM ready', { status: isLocalLLMReady() });
+        if (getLocalLLMError()) {
+          logger.error('Local LLM error', { error: getLocalLLMError() });
+        }
+      } catch (err) {
+        logger.error('Local LLM init failed', { error: (err as Error).message });
+      }
+
+      logger.info('Initializing local STT model...');
+      try {
+        await ensureLocalSTT();
+        logger.info('Local STT ready', { status: isLocalSTTReady() });
+        if (getLocalSTTError()) {
+          logger.error('Local STT error', { error: getLocalSTTError() });
+        }
+      } catch (err) {
+        logger.error('Local STT init failed', { error: (err as Error).message });
+      }
+    }
+
+    app.listen(env.PORT, '0.0.0.0', () => {
+      logger.info(`Server running on http://localhost:${env.PORT}`);
+      logger.info(`Mode: ${isGroqConfigured() ? 'API (Groq)' : (isLocalLLMReady() ? 'Local LLM' : 'No LLM available')}`);
+      logger.info(`Environment: ${env.NODE_ENV}`);
     });
   } catch (err) {
-    console.error('Failed to start server:', err);
+    logger.error('Failed to start server', { error: (err as Error).message });
     process.exit(1);
   }
 }
 
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+  logger.error('Unhandled rejection', { error: (err as Error).message });
 });
 
 process.on('SIGTERM', async () => {

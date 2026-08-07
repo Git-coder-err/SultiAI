@@ -16,14 +16,14 @@ async function request(method, path, body = null) {
 
   const res = await fetch(`${BASE_URL}${path}`, opts);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+  if (!res.ok) throw new Error((data && data.error && (data.error.message || data.error)) || 'Request failed');
+  return data && typeof data === 'object' && 'data' in data ? data.data : data;
 }
 
 export const api = {
   // Auth
   signUp: (email, password, name, native_language, target_language) =>
-    request('POST', '/api/auth/signup', { email, password, name, native_language, target_language }),
+    request('POST', '/api/auth/signup', { fullname: name, email, password, native_language, target_language }),
   signIn: (email, password) =>
     request('POST', '/api/auth/signin', { email, password }),
 
@@ -47,16 +47,17 @@ export const api = {
   deleteHistory: (id) => request('DELETE', `/api/history/${id}`),
 
   // AI / Translation
-  chat: (message, language) =>
-    request('POST', '/api/assistant/chat', { message, language }),
+  chat: (message, language, character) =>
+    request('POST', '/api/assistant/chat', { message, language, character }),
   groqChat: (messages, nativeLanguage) =>
     request('POST', '/api/groq', { messages, nativeLanguage }),
   translate: (text, from, to) =>
     request('POST', '/api/speech/translate', { text, from, to }),
   transcribe: (audio, language) =>
     request('POST', '/api/speech/transcribe', { audio, language }),
-  ttsSynthesize: (text, voice, rate) =>
-    request('POST', '/api/speech/synthesize', { text, voice, rate }),
+  ttsSynthesize: (text, voice, rate, pitch) =>
+    request('POST', '/api/speech/synthesize', { text, voice, rate, pitch }),
+  getVoices: () => request('GET', '/api/speech/voices'),
   analyzeNLP: (text) => request('POST', '/api/speech/nlp/analyze', { text }),
   detectLanguage: (text) => request('POST', '/api/speech/detect', { text }),
   checkPronunciation: (text) => request('POST', '/api/speech/pronunciation/check', { text }),
@@ -175,4 +176,13 @@ export const api = {
     request('GET', `/api/preservation/variations?word=${encodeURIComponent(word)}`),
   verifyPreservedWord: (wordId, status) =>
     request('PUT', `/api/preservation/${wordId}/verify`, { status }),
+
+  // Voice Agent (xAI realtime speech-to-speech)
+  agentStatus: () => request('GET', '/api/agent/status'),
+  agentToken: () => request('POST', '/api/agent/token'),
+
+  // Generic methods for offline sync
+  postData: (path, body) => request('POST', path, body),
+  putData: (path, body) => request('PUT', path, body),
+  patchData: (path, body) => request('PATCH', path, body),
 };

@@ -18,7 +18,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient colors={['#1E6F9F', '#155A7E']} style={styles.container}>
+    <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Button title="" icon="arrow-back" variant="ghost" textStyle={{ color: '#fff' }} onPress={() => navigation.goBack()} style={{ alignSelf: 'flex-start', marginBottom: spacing.xl }} />
@@ -28,21 +28,25 @@ export default function ForgotPasswordScreen({ navigation }) {
           <Text style={styles.subtitle}>Enter your email and we'll send you reset instructions.</Text>
 
           {sent ? (
-            <View style={styles.sentCard}>
-              <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+            <View style={[styles.sentCard, { backgroundColor: colors.surface }]}>
+              <Ionicons name="checkmark-circle" size={48} color={colors.success} />
               <Text style={[styles.sentTitle, { color: colors.text }]}>Email Sent!</Text>
               <Text style={[styles.sentDesc, { color: colors.textSecondary }]}>Check your inbox for reset instructions.</Text>
               <Button title="Back to Login" variant="outline" onPress={() => navigation.goBack()} style={{ marginTop: spacing.xl }} />
             </View>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <Input
+                id="resetEmail"
+                name="resetEmail"
                 label="Email Address"
                 icon="mail-outline"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="your@email.com"
                 keyboardType="email-address"
+                autoComplete="email"
+                testID="resetEmail-input"
               />
               <Button title="Send Reset Link" onPress={handleReset} gradient fullWidth />
               <Button title="Back to Login" variant="ghost" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }} />

@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensi
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { XP_VALUES } from '../constants';
+import { featureFlags } from '../services/features';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
@@ -107,6 +109,7 @@ export default function ARSceneScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const { addXp } = useGame();
   const insets = useSafeAreaInsets();
+  const arEnabled = featureFlags.isEnabled('enableARMode');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -150,7 +153,7 @@ export default function ARSceneScreen({ navigation, route }) {
       const res = await api.analyzeARImage(photo.base64, scenarioId, 'image/jpeg');
       if (res.objects?.length > 0) {
         setDetectedObjects(res.objects);
-        addXp(5, 'ar_scan');
+        addXp(XP_VALUES.AR_SCAN, 'ar_scan');
       } else {
         fallbackBrowse();
       }
@@ -178,7 +181,7 @@ export default function ARSceneScreen({ navigation, route }) {
   const handleSave = async (obj) => {
     try {
       await api.savePhrase(obj.bisaya, 'Bisaya', obj.category);
-      addXp(2, 'save_phrase');
+      addXp(XP_VALUES.SAVE_PHRASE, 'save_phrase');
     } catch {}
   };
 
@@ -199,6 +202,20 @@ export default function ARSceneScreen({ navigation, route }) {
   }
 
   const scenarioGradient = scenario?.gradient || ['#10B981', '#059669'];
+
+  if (!arEnabled) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.disabledContainer}>
+          <Ionicons name="camera-off" size={48} color={colors.textSecondary} />
+          <Text style={styles.disabledText}>AR Mode is currently disabled</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.backBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

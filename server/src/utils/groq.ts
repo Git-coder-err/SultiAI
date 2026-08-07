@@ -3,6 +3,10 @@ const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1';
 
+import { fetchWithRetry } from './fetchRetry';
+import { isLocalLLMReady, localLLMChat, localLLMJSON } from '../services/localLLM';
+import { isLocalSTTReady, localTranscribe } from '../services/sttService';
+
 interface GroqMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -17,13 +21,19 @@ export function isGroqConfigured(): boolean {
   return !!GROQ_API_KEY;
 }
 
-export async function groqChat(
+export function isConfigured(): boolean {
+  return isGroqConfigured() || isLocalLLMReady();
+}
+
+export function isSTTConfigured(): boolean {
+  return isGroqConfigured() || isLocalSTTReady();
+}
+
+async function groqChatRemote(
   messages: GroqMessage[],
   options: GroqOptions = {}
 ): Promise<string> {
-  if (!GROQ_API_KEY) throw new Error('Groq API key not configured');
-
-  const res = await fetch(`${GROQ_URL}/chat/completions`, {
+  const res = await fetchWithRetry(`${GROQ_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${GROQ_API_KEY}`,
@@ -46,36 +56,58 @@ export async function groqChat(
   return data.choices[0].message.content;
 }
 
+export async function groqChat(
+  messages: GroqMessage[],
+  options: GroqOptions = {}
+): Promise<string> {
+  if (GROQ_API_KEY) {
+    return groqChatRemote(messages, options);
+  }
+  if (isLocalLLMReady()) {
+    return localLLMChat(messages, {
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+    });
+  }
+  throw new Error('No LLM configured: set GROQ_API_KEY or initialize local LLM');
+}
+
 export async function groqTranscribeAudio(audioBase64: string, filename = 'recording.m4a', mimeType = 'audio/mp4'): Promise<string> {
-  if (!GROQ_API_KEY) throw new Error('Groq API key not configured');
+  if (GROQ_API_KEY) {
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
+    const boundary = `----FormBoundary${Date.now()}`;
 
-  const audioBuffer = Buffer.from(audioBase64, 'base64');
-  const boundary = `----FormBoundary${Date.now()}`;
+    const header = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
+    );
+    const footer = Buffer.from(
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3\r\n--${boundary}--`
+    );
+    const body = Buffer.concat([header, audioBuffer, footer]);
 
-  const header = Buffer.from(
-    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
-  );
-  const footer = Buffer.from(
-    `\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3\r\n--${boundary}--`
-  );
-  const body = Buffer.concat([header, audioBuffer, footer]);
+    const res = await fetchWithRetry(`${GROQ_URL}/audio/transcriptions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body,
+    });
 
-  const res = await fetch(`${GROQ_URL}/audio/transcriptions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-    },
-    body,
-  });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Groq Whisper error ${res.status}: ${text}`);
+    }
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Groq Whisper error ${res.status}: ${text}`);
+    const data: any = await res.json();
+    return data.text;
   }
 
-  const data: any = await res.json();
-  return data.text;
+  if (isLocalSTTReady()) {
+    return localTranscribe(audioBase64, mimeType);
+  }
+
+  throw new Error('No STT configured: set GROQ_API_KEY or initialize local STT');
 }
 
 export async function groqVision(
@@ -83,37 +115,39 @@ export async function groqVision(
   scenarioContext: string,
   mimeType = 'image/jpeg'
 ): Promise<string> {
-  if (!GROQ_API_KEY) throw new Error('Groq API key not configured');
+  if (GROQ_API_KEY) {
+    const res = await fetchWithRetry(`${GROQ_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.6-27b',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `Identify the main objects visible in this image that are relevant to: ${scenarioContext}. Return ONLY a JSON array of strings like ["object1","object2"]. Max 10 objects.` },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+            ],
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 300,
+      }),
+    });
 
-  const res = await fetch(`${GROQ_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'qwen/qwen3.6-27b',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: `Identify the main objects visible in this image that are relevant to: ${scenarioContext}. Return ONLY a JSON array of strings like ["object1","object2"]. Max 10 objects.` },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-          ],
-        },
-      ],
-      temperature: 0.2,
-      max_tokens: 300,
-    }),
-  });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Groq Vision error ${res.status}: ${text}`);
+    }
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Groq Vision error ${res.status}: ${text}`);
+    const data: any = await res.json();
+    return data.choices[0].message.content;
   }
 
-  const data: any = await res.json();
-  return data.choices[0].message.content;
+  throw new Error('Vision requires GROQ_API_KEY or local vision model');
 }
 
 export async function groqJson<T>(
@@ -129,6 +163,6 @@ export async function groqJson<T>(
   try {
     return JSON.parse(content) as T;
   } catch {
-    throw new Error(`Failed to parse Groq JSON response: ${content.substring(0, 200)}`);
+    throw new Error(`Failed to parse LLM JSON response: ${content.substring(0, 200)}`);
   }
 }

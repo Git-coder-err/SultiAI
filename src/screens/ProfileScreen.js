@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated, Platform, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
+import { useOfflineSync } from '../hooks/useOfflineSync';
 import { api } from '../services/api';
 import Card from '../components/Card';
 import GlassCard from '../components/GlassCard';
@@ -13,14 +14,66 @@ import Avatar from '../components/Avatar';
 import StreakFlame from '../components/StreakFlame';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
+import ConfirmModal from '../components/ConfirmModal';
 import AuroraBackground from '../components/AuroraBackground';
 import { spacing, borderRadius, shadows } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const WEEKLY_ACTIVITY = [
+  { day: 'M', xp: 45, color: '#14B8A6' },
+  { day: 'T', xp: 80, color: '#14B8A6' },
+  { day: 'W', xp: 30, color: '#14B8A6' },
+  { day: 'T', xp: 120, color: '#14B8A6' },
+  { day: 'F', xp: 65, color: '#14B8A6' },
+  { day: 'S', xp: 95, color: '#14B8A6' },
+  { day: 'S', xp: 140, color: '#14B8A6' },
+];
+
+const SKILLS = [
+  { label: 'Vocabulary', value: 72, color: '#14B8A6' },
+  { label: 'Speaking', value: 58, color: '#3B82F6' },
+  { label: 'Pronunciation', value: 84, color: '#8B5CF6' },
+  { label: 'Listening', value: 61, color: '#F59E0B' },
+  { label: 'Reading', value: 47, color: '#EC4899' },
+  { label: 'Writing', value: 39, color: '#10B981' },
+];
+
+const MODULE_TIME = [
+  { label: 'Voice Practice', hours: 4.5, color: '#14B8A6' },
+  { label: 'Phrasebook', hours: 3.2, color: '#3B82F6' },
+  { label: 'Flashcards', hours: 2.1, color: '#F59E0B' },
+  { label: 'Grammar', hours: 1.4, color: '#8B5CF6' },
+  { label: 'Listening', hours: 2.8, color: '#EC4899' },
+];
+
+const MOCK_CERTIFICATES = [
+  { id: 'cert1', title: 'Beginner Bisaya', date: 'Mar 2026', icon: 'ribbon', color: '#10B981' },
+  { id: 'cert2', title: 'Survival Phrases', date: 'Jun 2026', icon: 'medal', color: '#3B82F6' },
+];
+
+const MOCK_DOWNLOADS = [
+  { id: 'dl1', title: 'Offline Phrasebook (Bisaya)', size: '2.4 MB', icon: 'book', color: '#14B8A6' },
+  { id: 'dl2', title: 'Voice Lessons Pack 1', size: '18 MB', icon: 'musical-notes', color: '#8B5CF6' },
+];
+
+const MOCK_HISTORY = [
+  { id: 'h1', title: 'Market Roleplay with SULTI', date: 'Jul 20', msgs: 12, icon: 'chatbubbles', color: '#14B8A6' },
+  { id: 'h2', title: 'Pronunciation Lab: Greetings', date: 'Jul 19', msgs: 8, icon: 'mic', color: '#8B5CF6' },
+  { id: 'h3', title: 'Flashcards Review', date: 'Jul 18', msgs: 0, icon: 'layers', color: '#3B82F6' },
+];
+
+const THEME_MODES = [
+  { value: 'system', label: 'Natural', icon: 'contrast' },
+  { value: 'light', label: 'Light', icon: 'sunny' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
+];
+
 export default function ProfileScreen({ navigation }) {
   const { user, signOut, refreshProfile } = useUser();
-  const { colors, isDark, toggleTheme } = useTheme();
-  const { xp, coins, hearts, streak, badges } = useGame();
+  const { colors, isDark, themeMode, setThemeMode, reduceMotion, highContrast, largeText, toggleReduceMotion, toggleHighContrast, toggleLargeText, getAnimationDuration } = useTheme();
+  const { xp, coins, hearts, streak, badges, getLevelInfo } = useGame();
+  const { enqueueAction } = useOfflineSync();
+  const levelInfo = getLevelInfo(xp);
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -31,12 +84,15 @@ export default function ProfileScreen({ navigation }) {
   const [editCountry, setEditCountry] = useState('');
   const [savedPhrases, setSavedPhrases] = useState([]);
   const [activeTab, setActiveTab] = useState('stats');
+  const [infoModal, setInfoModal] = useState(null);
+  const [showSignOut, setShowSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (user) { setEditName(user.name || ''); setEditCountry(user.country || ''); }
     loadSettings();
     loadSavedPhrases();
-    Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: getAnimationDuration(600), useNativeDriver: true }).start();
   }, [user]);
 
   const loadSettings = async () => { try { const d = await api.getUserSettings(); setSettings(d); } catch {} };
@@ -44,21 +100,33 @@ export default function ProfileScreen({ navigation }) {
 
   const handleSaveProfile = async () => {
     setSaving(true);
-    try { await api.updateProfile({ name: editName, country: editCountry }); await refreshProfile(); setEditing(false); }
-    catch (err) { Alert.alert('Error', err.message); }
+    try {
+      await api.updateProfile({ name: editName, country: editCountry });
+      await refreshProfile();
+      setEditing(false);
+      enqueueAction({ endpoint: '/api/user/me', method: 'PUT', payload: { name: editName, country: editCountry } });
+    } catch (err) { Alert.alert('Error', err.message); }
     finally { setSaving(false); }
   };
 
   const handleDeletePhrase = async (id) => {
-    try { await api.deleteSavedPhrase(id); setSavedPhrases(prev => prev.filter(p => p.phrase_id !== id)); }
-    catch (err) { Alert.alert('Error', err.message); }
+    try {
+      await api.deleteSavedPhrase(id);
+      setSavedPhrases(prev => prev.filter(p => p.phrase_id !== id));
+      enqueueAction({ endpoint: `/api/saved-phrases/${id}`, method: 'POST', payload: { deleted: true } });
+    } catch (err) { Alert.alert('Error', err.message); }
   };
 
-  const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      setShowSignOut(false);
+    } catch (err) {
+      Alert.alert('Error', err?.message || 'Failed to sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const tabs = [
@@ -81,6 +149,10 @@ export default function ProfileScreen({ navigation }) {
               <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="star" size={16} color="#FFD700" />
                 <Text style={styles.headerStatValue}>{xp} XP</Text>
+                <View style={[styles.levelBadge, { backgroundColor: levelInfo.color }]}>
+                  <Ionicons name={levelInfo.icon} size={10} color="#fff" />
+                  <Text style={styles.levelText}>Lv. {levelInfo.level}</Text>
+                </View>
               </View>
               <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="heart" size={16} color="#FF6B6B" />
@@ -168,6 +240,103 @@ export default function ProfileScreen({ navigation }) {
                     <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
                   </TouchableOpacity>
                 </View>
+
+                <Text style={[styles.sectionHeader, { color: colors.text }]}>Analytics</Text>
+                <GlassCard variant="elevated" style={styles.analyticsCard}>
+                  <View style={styles.analyticsTitleRow}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name="stats-chart" size={18} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Weekly Activity</Text>
+                  </View>
+                  <View style={styles.barChart}>
+                    {WEEKLY_ACTIVITY.map((d, i) => {
+                      const max = Math.max(...WEEKLY_ACTIVITY.map((x) => x.xp));
+                      return (
+                        <View key={i} style={styles.barCol}>
+                          <Text style={[styles.barValue, { color: colors.textSecondary }]}>{d.xp}</Text>
+                          <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
+                            <View style={[styles.barFill, { height: `${(d.xp / max) * 100}%`, backgroundColor: d.color }]} />
+                          </View>
+                          <Text style={[styles.barDay, { color: colors.textLight }]}>{d.day}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </GlassCard>
+
+                <GlassCard variant="elevated" style={styles.analyticsCard}>
+                  <View style={styles.analyticsTitleRow}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.accent + '20' }]}>
+                      <Ionicons name="pulse" size={18} color={colors.accent} />
+                    </View>
+                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Skill Mastery</Text>
+                  </View>
+                  {SKILLS.map((s) => (
+                    <View key={s.label} style={styles.skillRow}>
+                      <Text style={[styles.skillLabel, { color: colors.textSecondary }]}>{s.label}</Text>
+                      <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
+                        <View style={[styles.skillFill, { width: `${s.value}%`, backgroundColor: s.color }]} />
+                      </View>
+                      <Text style={[styles.skillValue, { color: colors.text }]}>{s.value}%</Text>
+                    </View>
+                  ))}
+                </GlassCard>
+
+                <GlassCard variant="elevated" style={styles.analyticsCard}>
+                  <View style={styles.analyticsTitleRow}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.success + '20' }]}>
+                      <Ionicons name="time" size={18} color={colors.success} />
+                    </View>
+                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Learning Time</Text>
+                    <Text style={[styles.analyticsTotal, { color: colors.textSecondary }]}>14.0h total</Text>
+                  </View>
+                  {MODULE_TIME.map((m) => {
+                    const max = Math.max(...MODULE_TIME.map((x) => x.hours));
+                    return (
+                      <View key={m.label} style={styles.skillRow}>
+                        <Text style={[styles.skillLabel, { color: colors.textSecondary }]}>{m.label}</Text>
+                        <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
+                          <View style={[styles.skillFill, { width: `${(m.hours / max) * 100}%`, backgroundColor: m.color }]} />
+                        </View>
+                        <Text style={[styles.skillValue, { color: colors.text }]}>{m.hours}h</Text>
+                      </View>
+                    );
+                  })}
+                </GlassCard>
+
+                <Text style={[styles.sectionHeader, { color: colors.text }]}>More</Text>
+                <View style={styles.quickLinks}>
+                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'History', rows: MOCK_HISTORY, kind: 'history' })}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name="time-outline" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.linkText, { color: colors.text }]}>History</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'Certificates', rows: MOCK_CERTIFICATES, kind: 'cert' })}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.accent + '20' }]}>
+                      <Ionicons name="ribbon" size={20} color={colors.accent} />
+                    </View>
+                    <Text style={[styles.linkText, { color: colors.text }]}>Certificates</Text>
+                    <Text style={[styles.linkCount, { color: colors.textLight }]}>{MOCK_CERTIFICATES.length}</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'Downloads', rows: MOCK_DOWNLOADS, kind: 'download' })}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.success + '20' }]}>
+                      <Ionicons name="download" size={20} color={colors.success} />
+                    </View>
+                    <Text style={[styles.linkText, { color: colors.text }]}>Downloads</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'Privacy', rows: null, kind: 'privacy' })}>
+                    <View style={[styles.linkIcon, { backgroundColor: colors.warning + '20' }]}>
+                      <Ionicons name="shield-checkmark" size={20} color={colors.warning} />
+                    </View>
+                    <Text style={[styles.linkText, { color: colors.text }]}>Privacy</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -176,9 +345,27 @@ export default function ProfileScreen({ navigation }) {
                 {editing ? (
                   <>
                     <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Full Name</Text>
-                    <TextInput style={[styles.fieldInput, { color: colors.text, backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]} value={editName} onChangeText={setEditName} />
+                    <TextInput
+                      id="editName"
+                      name="editName"
+                      testID="editName-input"
+                      style={[styles.fieldInput, { color: colors.text, backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
+                      value={editName}
+                      onChangeText={setEditName}
+                      autoComplete="name"
+                      autoCapitalize="words"
+                    />
                     <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: spacing.md }]}>Country</Text>
-                    <TextInput style={[styles.fieldInput, { color: colors.text, backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]} value={editCountry} onChangeText={setEditCountry} />
+                    <TextInput
+                      id="editCountry"
+                      name="editCountry"
+                      testID="editCountry-input"
+                      style={[styles.fieldInput, { color: colors.text, backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
+                      value={editCountry}
+                      onChangeText={setEditCountry}
+                      autoComplete="country-name"
+                      autoCapitalize="words"
+                    />
                     <View style={styles.editActions}>
                       <Button title="Cancel" variant="ghost" onPress={() => setEditing(false)} />
                       <Button title="Save" onPress={handleSaveProfile} loading={saving} />
@@ -236,8 +423,13 @@ export default function ProfileScreen({ navigation }) {
                           <Text style={[styles.phraseText, { color: colors.text }]}>{item.phrase}</Text>
                           {item.language && <Badge title={item.language} variant="info" size="sm" />}
                         </View>
-                        <TouchableOpacity onPress={() => handleDeletePhrase(item.phrase_id)}>
-                          <Ionicons name="trash-outline" size={18} color={colors.error} />
+                         <TouchableOpacity
+                           onPress={() => handleDeletePhrase(item.phrase_id)}
+                           style={styles.iconBtn}
+                           accessibilityRole="button"
+                           accessibilityLabel="Delete phrase"
+                         >
+                          <Ionicons name="trash-outline" size={20} color={colors.error} />
                         </TouchableOpacity>
                       </GlassCard>
                     ))}
@@ -249,15 +441,69 @@ export default function ProfileScreen({ navigation }) {
             {activeTab === 'settings' && (
               <>
                 <GlassCard>
-                <TouchableOpacity style={styles.settingRow} onPress={toggleTheme}>
+                <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
                     <View style={[styles.settingIcon, { backgroundColor: colors.accent + '20' }]}>
-                      <Ionicons name={isDark ? 'moon' : 'sunny'} size={18} color={colors.accent} />
+                      <Ionicons name="contrast" size={18} color={colors.accent} />
                     </View>
-                    <Text style={[styles.settingLabel, { color: colors.text }]}>Dark Mode</Text>
+                    <View>
+                      <Text style={[styles.settingLabel, { color: colors.text }]}>Appearance</Text>
+                      <Text style={[styles.settingSubLabel, { color: colors.textLight }]}>Natural follows your device theme</Text>
+                    </View>
                   </View>
-                  <View style={[styles.toggle, isDark && { backgroundColor: colors.primary }]}>
-                    <View style={[styles.toggleCircle, isDark && { marginLeft: 20 }]} />
+                </View>
+                <View style={styles.themePicker}>
+                  {THEME_MODES.map((m) => {
+                    const active = themeMode === m.value;
+                    return (
+                      <TouchableOpacity
+                        key={m.value}
+                        style={[styles.themeOption, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                        onPress={() => setThemeMode(m.value)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Ionicons name={m.icon} size={16} color={active ? '#fff' : colors.textSecondary} />
+                        <Text style={[styles.themeOptionText, { color: active ? '#fff' : colors.textSecondary }]}>{m.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity style={styles.settingRow} onPress={toggleReduceMotion}>
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.settingIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name="speedometer" size={18} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.settingLabel, { color: colors.text }]}>Reduce Motion</Text>
+                  </View>
+                  <View style={[styles.toggle, reduceMotion && { backgroundColor: colors.primary }]}>
+                    <View style={[styles.toggleCircle, reduceMotion && { marginLeft: 20 }]} />
+                  </View>
+                </TouchableOpacity>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity style={styles.settingRow} onPress={toggleHighContrast}>
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.settingIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name="contrast" size={18} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.settingLabel, { color: colors.text }]}>High Contrast</Text>
+                  </View>
+                  <View style={[styles.toggle, highContrast && { backgroundColor: colors.primary }]}>
+                    <View style={[styles.toggleCircle, highContrast && { marginLeft: 20 }]} />
+                  </View>
+                </TouchableOpacity>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity style={styles.settingRow} onPress={toggleLargeText}>
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.settingIcon, { backgroundColor: colors.primary + '20' }]}>
+                      <Ionicons name="text" size={18} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.settingLabel, { color: colors.text }]}>Large Text</Text>
+                  </View>
+                  <View style={[styles.toggle, largeText && { backgroundColor: colors.primary }]}>
+                    <View style={[styles.toggleCircle, largeText && { marginLeft: 20 }]} />
                   </View>
                 </TouchableOpacity>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -273,16 +519,6 @@ export default function ProfileScreen({ navigation }) {
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
-                    <View style={[styles.settingIcon, { backgroundColor: colors.primary + '20' }]}>
-                      <Ionicons name="mic" size={18} color={colors.primary} />
-                    </View>
-                    <Text style={[styles.settingLabel, { color: colors.text }]}>Voice</Text>
-                  </View>
-                  <Text style={[styles.settingValue, { color: colors.textSecondary }]}>{settings.voice_gender}</Text>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.settingRow}>
-                  <View style={styles.settingLeft}>
                     <View style={[styles.settingIcon, { backgroundColor: colors.textLight + '20' }]}>
                       <Ionicons name="information-circle" size={18} color={colors.textLight} />
                     </View>
@@ -292,7 +528,7 @@ export default function ProfileScreen({ navigation }) {
                 </View>
               </GlassCard>
 
-                <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: colors.glassBg, borderColor: colors.error + '30' }]} onPress={handleSignOut}>
+                <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: colors.glassBg, borderColor: colors.error + '30' }]} onPress={() => setShowSignOut(true)}>
                   <Ionicons name="log-out-outline" size={20} color={colors.error} />
                   <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
@@ -301,24 +537,85 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </ScrollView>
       </AuroraBackground>
+
+      <ConfirmModal
+        visible={showSignOut}
+        title="Sign Out?"
+        message="You can sign back in anytime. Your progress stays saved on this device."
+        confirmLabel="Sign Out"
+        icon="log-out-outline"
+        destructive
+        loading={signingOut}
+        onConfirm={handleSignOut}
+        onCancel={() => setShowSignOut(false)}
+      />
+
+      <Modal visible={!!infoModal} transparent animationType="slide" onRequestClose={() => setInfoModal(null)}>
+        <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(2,6,23,0.85)' : 'rgba(15,23,42,0.7)' }]}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{infoModal?.title}</Text>
+              <TouchableOpacity style={[styles.modalClose, { backgroundColor: colors.surfaceSecondary }]} onPress={() => setInfoModal(null)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {infoModal?.kind === 'privacy' ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
+                  {`SultiAI respects your privacy.\n\n• Your learning data (XP, streaks, saved phrases) is stored on your device and synced to your account when signed in.\n\n• Voice recordings are processed only to give you pronunciation feedback and are never sold or shared.\n\n• You can delete your saved phrases and account data at any time from the Phrases tab.\n\n• We use encryption for your credentials and never expose your password.`}
+                </Text>
+              </ScrollView>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {(infoModal?.rows || []).map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.infoRowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.infoRowIcon, { backgroundColor: item.color + '20' }]}>
+                      <Ionicons name={item.icon} size={18} color={item.color} />
+                    </View>
+                    <View style={styles.infoRowBody}>
+                      <Text style={[styles.infoRowTitle, { color: colors.text }]}>{item.title}</Text>
+                      {item.date ? (
+                        <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.date}</Text>
+                      ) : item.size ? (
+                        <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.size}</Text>
+                      ) : (
+                        <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.msgs} messages</Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', paddingBottom: spacing.xxxl, paddingHorizontal: spacing.xl, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   name: { fontSize: 24, fontWeight: '700', color: '#fff', marginTop: spacing.md, letterSpacing: 0.36 },
   email: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4, letterSpacing: -0.24 },
   username: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2, letterSpacing: -0.08 },
   headerStats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, justifyContent: 'center' },
   headerStatPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: borderRadius.full, gap: 6, backdropFilter: 'blur(8px)' },
+  levelBadge: { position: 'absolute', top: -6, right: -6, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  levelText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   headerStatValue: { fontSize: 14, fontWeight: '700', color: '#fff' },
   badgeRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md, alignItems: 'center' },
   moreBadges: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   tabRow: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginTop: spacing.xxxl, marginBottom: spacing.lg },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, gap: spacing.xs, ...shadows.sm },
-  tabActive: { shadowColor: '#0D9488', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  tabActive: { boxShadow: '0 2px 8px rgba(13,148,136,0.3)', elevation: 4 },
   tabText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.07 },
   content: { padding: spacing.xl, paddingTop: spacing.sm },
   statsGrid: { marginBottom: spacing.md },
@@ -352,9 +649,50 @@ const styles = StyleSheet.create({
   settingLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   settingIcon: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   settingLabel: { fontSize: 15, fontWeight: '500', letterSpacing: -0.24 },
+  settingSubLabel: { fontSize: 12, marginTop: 2 },
   settingValue: { fontSize: 14, letterSpacing: -0.24 },
+  themePicker: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  themeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  themeOptionText: { fontSize: 13, fontWeight: '700' },
   toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: '#D1D5DB', padding: 2, justifyContent: 'center' },
   toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
   signOutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: spacing.xxl, marginBottom: 40, paddingVertical: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1.5, gap: spacing.sm },
   signOutText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
+  sectionHeader: { fontSize: 18, fontWeight: '700', letterSpacing: -0.2, marginTop: spacing.lg, marginBottom: spacing.md },
+  analyticsCard: { marginBottom: spacing.md },
+  analyticsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  analyticsTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
+  analyticsTotal: { fontSize: 12, fontWeight: '600' },
+  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 120, gap: spacing.sm },
+  barCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: 4 },
+  barValue: { fontSize: 9, fontWeight: '600' },
+  barTrack: { width: 18, height: 70, borderRadius: 6, overflow: 'hidden', justifyContent: 'flex-end' },
+  barFill: { width: '100%', borderRadius: 6 },
+  barDay: { fontSize: 10, fontWeight: '700' },
+  skillRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  skillLabel: { width: 90, fontSize: 12, fontWeight: '500' },
+  skillTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
+  skillFill: { height: '100%', borderRadius: 4 },
+  skillValue: { width: 40, fontSize: 12, fontWeight: '700', textAlign: 'right' },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl, padding: spacing.lg, paddingBottom: spacing.xxl, maxHeight: '70%', borderWidth: 1 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
+  modalTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  modalClose: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  infoRowCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, marginBottom: spacing.sm },
+  infoRowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  infoRowBody: { flex: 1 },
+  infoRowTitle: { fontSize: 14, fontWeight: '700' },
+  infoRowMeta: { fontSize: 12, marginTop: 2 },
+  privacyText: { fontSize: 14, lineHeight: 22 },
 });

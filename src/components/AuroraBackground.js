@@ -78,12 +78,11 @@ export default function AuroraBackground({ children, style }) {
         <Particle key={i} particle={p} width={SCREEN_WIDTH} height={SCREEN_HEIGHT} />
       ))}
       {Platform.OS !== 'web' && (
-        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="default" pointerEvents="none" />
+        <BlurView intensity={80} style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]} tint="default" />
       )}
       <LinearGradient
         colors={['transparent', colors.background]}
-        style={[styles.fadeBottom, { height: 120 }]}
-        pointerEvents="none"
+        style={[styles.fadeBottom, { height: 120, pointerEvents: 'none' }]}
       />
       <View style={styles.content}>
         {children}
@@ -135,10 +134,10 @@ function AuroraBlob({ cfg, colors, screenWidth, screenHeight }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, position: 'relative' },
+  container: { flex: 1, position: 'relative', overflow: 'visible' },
   blob: { position: 'absolute' },
   fadeBottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
   },
-  content: { flex: 1, zIndex: 2 },
+  content: { flex: 1, zIndex: 2, minHeight: 0 },
 });

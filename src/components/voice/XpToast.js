@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
-    shadowColor: voice.primary,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
+    boxShadow: '0 4px 12px rgba(32,214,199,0.5)',
+    elevation: 8,
   },
   xp: { color: '#04111f', fontSize: 14, fontWeight: '800' },
   streak: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 4 },

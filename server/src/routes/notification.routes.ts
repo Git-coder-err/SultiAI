@@ -9,6 +9,15 @@ import {
 
 const router = Router();
 
+function serializeNotification(n: any) {
+  return {
+    id: n.notifyId,
+    is_read: !!n.isRead,
+    title: n.title,
+    message: n.message,
+  };
+}
+
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const rows = await getNotifications(req.user!.email);
@@ -18,11 +27,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         await createNotification(userId, 'Welcome!', 'Practice your daily Bisaya phrases!');
         await createNotification(userId, 'Update', 'New community resources available!');
         const fresh = await getNotifications(req.user!.email);
-        res.json(fresh);
+        res.json(fresh.map(serializeNotification));
         return;
       }
     }
-    res.json(rows);
+    res.json(rows.map(serializeNotification));
   } catch (err) {
     res.status(500).json({ error: 'Failed to get notifications' });
   }

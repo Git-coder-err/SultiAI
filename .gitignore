@@ -10,6 +10,8 @@ server/.env
 server/.expo/
 server/sultiai.db*
 server/audio-cache/
+server/models/**/onnx/
+server/models/**/*.onnx
 
 # dependencies
 node_modules/

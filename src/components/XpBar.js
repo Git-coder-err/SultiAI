@@ -1,26 +1,27 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withTiming, Easing,
+} from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
-import { borderRadius, spacing } from '../theme';
+import { spacing } from '../theme';
 
 export default function XpBar({ current, max, label, showLabel = true, color, height = 8 }) {
   const { colors } = useTheme();
-  const anim = useRef(new Animated.Value(0)).current;
-  const c = color || colors.accent;
   const progress = max > 0 ? Math.min(current / max, 1) : 0;
+  const animatedWidth = useSharedValue(0);
+  const c = color || colors.accent;
 
   useEffect(() => {
-    Animated.timing(anim, {
-      toValue: progress,
+    animatedWidth.value = withTiming(progress * 100, {
       duration: 800,
-      useNativeDriver: false,
-    }).start();
-  }, [progress]);
+      easing: Easing.out(Easing.quad),
+    });
+  }, [progress, animatedWidth]);
 
-  const widthInterpolated = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    width: `${animatedWidth.value}%`,
+  }));
 
   return (
     <View style={styles.container}>
@@ -31,7 +32,7 @@ export default function XpBar({ current, max, label, showLabel = true, color, he
         </View>
       )}
       <View style={[styles.track, { height, backgroundColor: colors.border, borderRadius: height / 2 }]}>
-        <Animated.View style={[styles.fill, { width: widthInterpolated, height, backgroundColor: c, borderRadius: height / 2 }]} />
+        <Animated.View style={[styles.fill, { height, backgroundColor: c, borderRadius: height / 2 }, animatedStyle]} />
       </View>
     </View>
   );

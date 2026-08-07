@@ -1,28 +1,25 @@
-import React, { useEffect, useRef } from 'react';
-import { Text, Animated } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Text } from 'react-native';
+import { useSharedValue, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 
 export default function AnimatedNumber({ value, style, duration = 500, format }) {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-  const ref = useRef(null);
+  const animatedValue = useSharedValue(0);
+  const [display, setDisplay] = useState(format ? format(0) : '0');
 
   useEffect(() => {
-    Animated.timing(animatedValue, {
-      toValue: value,
+    animatedValue.value = withTiming(value, {
       duration,
-      useNativeDriver: false,
-    }).start();
-  }, [value]);
+      easing: Easing.out(Easing.quad),
+    });
+  }, [value, duration, animatedValue]);
 
   useEffect(() => {
-    const listener = animatedValue.addListener(({ value: v }) => {
-      if (ref.current) {
-        const display = format ? format(v) : Math.round(v).toString();
-        ref.current.setNativeProps({ text: display });
-      }
+    const id = animatedValue.addListener((v) => {
+      const displayValue = format ? format(v.value) : Math.round(v.value).toString();
+      runOnJS(setDisplay)(displayValue);
     });
-    return () => animatedValue.removeListener(listener);
-  }, []);
+    return () => animatedValue.removeListener(id);
+  }, [format, animatedValue]);
 
-  const initialDisplay = format ? format(0) : '0';
-  return <Text ref={ref} style={style}>{initialDisplay}</Text>;
+  return <Text style={style}>{display}</Text>;
 }

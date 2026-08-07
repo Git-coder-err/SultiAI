@@ -1,28 +1,21 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../context/ThemeContext';
-import { borderRadius, spacing, shadows, gradients } from '../theme';
 import { BlurView } from 'expo-blur';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, shadows } from '../theme';
 
 export default function GlassCard({
   children, style, variant = 'default', intensity = 30,
-  gradientBorder = false, glowColor, padding = 'lg',
+  gradientBorder = false, glowColor, padding = 'lg', floating = false,
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const padMap = { sm: spacing.sm, md: spacing.lg, lg: spacing.xl, xl: spacing.xxl, huge: spacing.huge };
 
-  const glassStyle = [
+  const baseStyle = [
     styles.base,
     { padding: padMap[padding] || spacing.xl },
     style,
   ];
-
-  const content = (
-    <View style={glassStyle}>
-      {children}
-    </View>
-  );
 
   if (Platform.OS === 'web') {
     return (
@@ -30,8 +23,9 @@ export default function GlassCard({
         styles.webGlass,
         { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
         variant === 'elevated' && styles.elevated,
-        variant === 'tinted' && { backgroundColor: 'rgba(20,184,166,0.08)', borderColor: 'rgba(20,184,166,0.15)' },
-        glassStyle,
+        variant === 'tinted' && { backgroundColor: colors.primary + '10', borderColor: colors.primary + '20' },
+        floating && styles.floatShadow,
+        baseStyle,
       ]}>
         <View style={[styles.shine, { backgroundColor: colors.glassHighlight }]} />
         {children}
@@ -40,12 +34,17 @@ export default function GlassCard({
   }
 
   return (
-    <BlurView intensity={intensity} tint="light" style={[
-      styles.base,
-      variant === 'elevated' && styles.elevated,
-      variant === 'tinted' && { backgroundColor: 'rgba(20,184,166,0.08)' },
-      glassStyle,
-    ]}>
+    <BlurView
+      intensity={intensity}
+      tint={isDark ? 'dark' : 'light'}
+      style={[
+        styles.base,
+        styles.inner,
+        variant === 'elevated' && styles.elevated,
+        variant === 'tinted' && { backgroundColor: colors.primary + '10' },
+        floating && styles.floatShadow,
+        baseStyle,
+      ]}>
       {children}
     </BlurView>
   );
@@ -56,18 +55,24 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
     ...shadows.lg,
+  },
+  inner: {
+    overflow: 'hidden',
+    borderRadius: borderRadius.xl,
   },
   webGlass: {
     borderRadius: borderRadius.xl,
     borderWidth: 1,
-    overflow: 'hidden',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
   },
   elevated: {
     ...shadows.xl,
+  },
+  floatShadow: {
+    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+    elevation: 10,
   },
   shine: {
     position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
