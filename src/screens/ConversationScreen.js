@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
-import { api } from '../services/api';
 import GlassCard from '../components/GlassCard';
-import Avatar from '../components/Avatar';
 import Badge from '../components/Badge';
 import { spacing, borderRadius, shadows } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,12 +29,12 @@ const DAILY_DRILL = {
   prompt: 'Market bargaining phrases',
 };
 
-export default function ConversationScreen({ navigation }) {
-  const { user } = useUser();
+export default function ConversationScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('phrasebook');
-  const [loading, setLoading] = useState(false);
+
+  const selectedCategory = route?.params?.category;
 
   const handleCategory = (cat) => {
     navigation.navigate('Learn', { situation: cat.prompt, label: cat.label });
@@ -69,6 +66,14 @@ export default function ConversationScreen({ navigation }) {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+        {selectedCategory ? (
+          <View style={[styles.categoryBanner, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+            <Ionicons name="pricetag" size={16} color={colors.primary} />
+            <Text style={[styles.categoryBannerText, { color: colors.primary }]}>
+              Practicing: {selectedCategory}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.tabRow}>
           {tabs.map((t) => (
             <TouchableOpacity
@@ -102,7 +107,7 @@ export default function ConversationScreen({ navigation }) {
                   <Badge title="Daily Practice" variant="info" size="sm" />
                 </View>
                 <Text style={styles.dailyTitle}>{DAILY_DRILL.emoji} {DAILY_DRILL.label}</Text>
-                <Text style={styles.dailyPhrase}>"{DAILY_DRILL.phrase}"</Text>
+                <Text style={styles.dailyPhrase}>{'"'}{DAILY_DRILL.phrase}{'"'}</Text>
                 <Text style={styles.dailyTranslation}>{DAILY_DRILL.translation}</Text>
               </View>
               <TouchableOpacity style={[styles.dailyBtn, { backgroundColor: colors.primary }]} onPress={handleDailyDrill} activeOpacity={0.8}>
@@ -114,7 +119,7 @@ export default function ConversationScreen({ navigation }) {
 
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Explore Categories</Text>
           <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-            Tap a category to practice situational phrases with Hoy!
+            Tap a category to practice situational phrases with SULTI!
           </Text>
 
           {CATEGORIES.map((cat) => (
@@ -146,8 +151,14 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: 0.36 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4, letterSpacing: -0.08 },
   tabRow: { flexDirection: 'row', paddingHorizontal: spacing.xl, gap: spacing.sm, marginTop: -spacing.lg, marginBottom: spacing.lg },
+  categoryBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginHorizontal: spacing.xl, marginBottom: spacing.md, paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1,
+  },
+  categoryBannerText: { fontSize: 13, fontWeight: '700' },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.md, gap: spacing.xs, ...shadows.sm },
-  tabActive: { shadowColor: '#0D9488', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  tabActive: { boxShadow: '0 2px 8px rgba(13,148,136,0.3)', elevation: 4 },
   tabText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.07 },
   content: { padding: spacing.xl, paddingTop: 0 },
   dailyCard: { marginBottom: spacing.xxl, overflow: 'hidden' },

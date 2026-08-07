@@ -108,13 +108,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.25)',
-    shadowColor: voice.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5, shadowRadius: 14, elevation: 10,
+    boxShadow: '0 4px 14px rgba(32,214,199,0.5)',
+    elevation: 10,
   },
   micBtnActive: {
     borderColor: 'rgba(255,107,107,0.6)',
-    shadowColor: voice.danger,
+    boxShadow: '0 4px 14px rgba(255,107,107,0.5)',
   },
   micGradient: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
 });

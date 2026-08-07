@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { useGame } from '../context/GameContext';
+import { useOfflineSync } from '../hooks/useOfflineSync';
 import { api } from '../services/api';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
@@ -17,9 +18,10 @@ const PODIUM_HEIGHTS = [88, 64, 48];
 const PODIUM_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
 export default function LeaderboardScreen({ navigation }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, getAnimationDuration } = useTheme();
   const { user } = useUser();
   const { xp, streak } = useGame();
+  const { enqueueAction } = useOfflineSync();
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('weekly');

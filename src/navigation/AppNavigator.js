@@ -2,17 +2,15 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet } from 'react-native';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import LoadingState from '../components/LoadingState';
-import FloatingTabBar from '../components/FloatingTabBar';
-import { spacing } from '../theme';
+import BottomTabBar from '../components/BottomTabBar';
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
-import HoyTutorScreen from '../screens/HoyTutorScreen';
-import ConversationScreen from '../screens/ConversationScreen';
+import SultiTutorScreen from '../screens/SultiTutorScreen';
+import LearnScreen from '../screens/LearnScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PronunciationScreen from '../screens/PronunciationScreen';
 import FlashcardsScreen from '../screens/FlashcardsScreen';
@@ -25,6 +23,8 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ARSceneScreen from '../screens/ARSceneScreen';
 import VoiceModeScreen from '../screens/VoiceModeScreen';
 import WhisperAIScreen from '../screens/WhisperAIScreen';
+import ConversationScreen from '../screens/ConversationScreen';
+import { ScenarioPracticeScreen, GrammarScreen, ListeningScreen, WritingScreen, ReadingScreen, SultiSwitchScreen, CultureNotesScreen, ReviewCenterScreen } from '../screens/learning/ModuleScreens';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -32,12 +32,12 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   return (
     <Tab.Navigator
-      tabBar={(props) => <FloatingTabBar {...props} />}
+      tabBar={(props) => <BottomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="Practice" component={ConversationScreen} options={{ tabBarLabel: 'Practice' }} />
-      <Tab.Screen name="Learn" component={HoyTutorScreen} options={{ tabBarLabel: 'Tutor' }} />
+      <Tab.Screen name="Learn" component={LearnScreen} options={{ tabBarLabel: 'Learn' }} />
+      <Tab.Screen name="SULTI" component={SultiTutorScreen} options={{ tabBarLabel: 'SULTI' }} />
       <Tab.Screen name="Community" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
@@ -64,6 +64,15 @@ export default function AppNavigator() {
             <Stack.Screen name="ARScene" component={ARSceneScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="VoiceMode" component={VoiceModeScreen} options={{ presentation: 'modal', animation: 'fade' }} />
             <Stack.Screen name="WhisperAI" component={WhisperAIScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Phrasebook" component={ConversationScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ScenarioPractice" component={ScenarioPracticeScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Grammar" component={GrammarScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Listening" component={ListeningScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Writing" component={WritingScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Reading" component={ReadingScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="SultiSwitch" component={SultiSwitchScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="CultureNotes" component={CultureNotesScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ReviewCenter" component={ReviewCenterScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (

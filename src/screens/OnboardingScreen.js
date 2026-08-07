@@ -65,7 +65,7 @@ export default function OnboardingScreen({ navigation }) {
   );
 
   return (
-    <LinearGradient colors={['#1E6F9F', '#155A7E']} style={styles.container}>
+    <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.container}>
       <View style={styles.skipRow}>
         {currentIndex < slides.length - 1 && (
           <Button title="Skip" variant="ghost" textStyle={{ color: 'rgba(255,255,255,0.8)' }} onPress={handleSkip} />

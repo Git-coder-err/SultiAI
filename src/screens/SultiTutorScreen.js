@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { XP_VALUES } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -15,6 +17,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGame } from '../context/GameContext';
 import { useTheme } from '../context/ThemeContext';
+import { useUser } from '../context/UserContext';
 import { api } from '../services/api';
 import { speakTTS, stopTTS } from '../utils/tts';
 import GlassCard from '../components/GlassCard';
@@ -23,6 +26,8 @@ import AIAvatar from '../components/AIAvatar';
 import AuroraBackground from '../components/AuroraBackground';
 import { spacing, borderRadius, getTabBarClearance } from '../theme';
 import useAdaptiveTutor from '../hooks/useAdaptiveTutor';
+
+const CHAT_HISTORY_KEY = 'sultiai_chat_history';
 
 const SITUATIONS = [
   { label: 'Greetings', icon: 'hand-left', desc: 'Meeting someone new', color: '#14B8A6' },
@@ -129,9 +134,10 @@ function WaveformBar({ index }) {
   return <Animated.View style={style} />;
 }
 
-export default function HoyTutorScreen({ navigation, route }) {
+export default function SultiTutorScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const { addXp, hearts } = useGame();
+  const { user } = useUser();
   const insets = useSafeAreaInsets();
   const adaptiveTutor = useAdaptiveTutor();
 
@@ -148,9 +154,15 @@ export default function HoyTutorScreen({ navigation, route }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [continuousMode, setContinuousMode] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const flatListRef = useRef(null);
   const isRecordingRef = useRef(false);
   const durationInterval = useRef(null);
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
@@ -166,15 +178,20 @@ export default function HoyTutorScreen({ navigation, route }) {
   }, [recorderState?.isRecording, isSpeaking]);
 
   const micGlowStyle = useAnimatedStyle(() => ({
-    shadowColor: recorderState?.isRecording ? '#EF4444' : colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4 + micGlow.value * 0.4,
-    shadowRadius: 8 + micGlow.value * 12,
+    boxShadow: `0 0 ${8 + micGlow.value * 12}px ${recorderState?.isRecording ? 'rgba(239,68,68,' : 'rgba(20,184,166,'}${0.4 + micGlow.value * 0.4})`,
     elevation: 4 + micGlow.value * 6,
   }));
 
+  async function loadChatHistory() {
+    try {
+      const raw = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
+      if (raw) setChatHistory(JSON.parse(raw));
+    } catch {}
+  }
+
   useEffect(() => {
     loadLevel();
+    loadChatHistory();
     adaptiveTutor.loadState();
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
@@ -187,6 +204,33 @@ export default function HoyTutorScreen({ navigation, route }) {
       const d = await api.getTutorLevel();
       setLevel(d);
     } catch {}
+  };
+
+  const persistChatHistory = async () => {
+    const current = messagesRef.current;
+    const real = current.filter((m) => m.role !== 'assistant' || !m.quickActions);
+    if (real.length === 0) return;
+    const firstUser = real.find((m) => m.role === 'user' || m.role === 'user_voice');
+    const record = {
+      id: sessionId || `local_${Date.now()}`,
+      title: firstUser?.text || firstUser?.transcription || 'Voice conversation',
+      date: new Date().toISOString(),
+      messages: current.slice(0, 80),
+      count: real.length,
+    };
+    const merged = [record, ...chatHistory.filter((h) => h.id !== record.id)].slice(0, 10);
+    setChatHistory(merged);
+    try {
+      await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(merged));
+    } catch {}
+  };
+
+  const loadConversation = (record) => {
+    setShowHistory(false);
+    if (record?.messages?.length) {
+      setMessages(record.messages);
+      setSessionId(record.id?.startsWith('local_') ? null : record.id);
+    }
   };
 
   const startRecording = async () => {
@@ -228,8 +272,9 @@ export default function HoyTutorScreen({ navigation, route }) {
       const topic = data.analysis?.topics?.[0] || 'general';
       const pronScore = data.pronunciation?.score || 80;
       adaptiveTutor.recordInteraction(topic, pronScore >= 60, pronScore);
-      addXp(15, 'voice_practice');
+      addXp(XP_VALUES.VOICE_PRACTICE_TURN, 'voice_practice');
       if (data.reply) speakReply(data.reply);
+      persistChatHistory();
 
       if (messages.length > 0) {
         setMessages(prev => prev.map((m, i) =>
@@ -277,8 +322,9 @@ export default function HoyTutorScreen({ navigation, route }) {
       if (data.analysis?.user_level) setLevel(p => ({ ...p, level: data.analysis.user_level }));
       const chatTopic = data.analysis?.topics?.[0] || 'general';
       adaptiveTutor.recordInteraction(chatTopic, true, 85);
-      addXp(10, 'chat');
+      addXp(XP_VALUES.TUTOR_CHAT, 'chat');
       if (data.reply) speakReply(data.reply);
+      persistChatHistory();
     } catch (err) { addMessage('assistant', `Sorry: ${err.message}`); }
     finally { setLoading(false); }
   };
@@ -289,7 +335,7 @@ export default function HoyTutorScreen({ navigation, route }) {
     try {
       const data = await api.generateLesson(situation);
       addMessage('lesson', data.reply || data.lesson, { ...data });
-      addXp(20, 'lesson');
+      addXp(XP_VALUES.TUTOR_LESSON, 'lesson');
     } catch (err) { addMessage('assistant', `Sorry: ${err.message}`); }
     finally { setLoading(false); }
   };
@@ -312,7 +358,7 @@ export default function HoyTutorScreen({ navigation, route }) {
       const data = await api.tutorChat(instruction, null, sessionId);
       if (data.session_id) setSessionId(data.session_id);
       addMessage('assistant', data.reply);
-      addXp(15, 'roleplay');
+      addXp(XP_VALUES.ROLEPLAY_START, 'roleplay');
     } catch (err) { addMessage('assistant', `Sorry: ${err.message}`); }
     finally { setLoading(false); }
   };
@@ -590,6 +636,9 @@ export default function HoyTutorScreen({ navigation, route }) {
             <TouchableOpacity style={styles.headerBtn} onPress={openVoiceMode} activeOpacity={0.7}>
               <Ionicons name="mic-circle" size={28} color="#fff" />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.headerBtn} onPress={() => setShowHistory(true)} activeOpacity={0.7}>
+              <Ionicons name="time-outline" size={24} color="#fff" />
+            </TouchableOpacity>
             <View style={styles.headerPill}>
               <Ionicons name="heart" size={14} color="#FF6B6B" />
               <Text style={styles.headerPillText}>{hearts}</Text>
@@ -647,6 +696,9 @@ export default function HoyTutorScreen({ navigation, route }) {
           </TouchableOpacity>
           <View style={[styles.inputWrap, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
             <TextInput
+              id="tutorInput"
+              name="tutorInput"
+              testID="tutor-input"
               style={[styles.input, { color: colors.text }]}
               placeholder="Type in Bisaya or English..."
               placeholderTextColor={colors.textLight}
@@ -655,6 +707,8 @@ export default function HoyTutorScreen({ navigation, route }) {
               onSubmitEditing={sendMessage}
               editable={!loading}
               multiline
+              autoComplete="off"
+              autoCorrect={false}
             />
           </View>
           <Animated.View style={micGlowStyle}>
@@ -679,6 +733,73 @@ export default function HoyTutorScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </BlurView>
+
+      <Modal visible={showHistory} transparent animationType="slide" onRequestClose={() => setShowHistory(false)}>
+        <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(2,6,23,0.85)' : 'rgba(15,23,42,0.7)' }]}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Sulti&apos;s Memory</Text>
+                <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>History & what Sulti remembers about you</Text>
+              </View>
+              <TouchableOpacity style={[styles.modalClose, { backgroundColor: colors.surfaceSecondary }]} onPress={() => setShowHistory(false)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.memorySection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.memoryLabel, { color: colors.textSecondary }]}>AI MEMORY</Text>
+              <View style={styles.memoryChips}>
+                {[
+                  user?.fullname ? `Name: ${user.fullname.split(' ')[0]}` : null,
+                  user?.native_language ? `Native: ${user.native_language}` : null,
+                  user?.target_language ? `Learning: ${user.target_language}` : null,
+                  adaptiveTutor.difficulty ? `Level: ${adaptiveTutor.difficulty}` : null,
+                  level?.level ? `Tutor: ${level.level}` : null,
+                  level?.total_xp ? `${level.total_xp} total XP` : null,
+                ].filter(Boolean).map((m) => (
+                  <View key={m} style={[styles.memoryChip, { backgroundColor: colors.primary + '15' }]}>
+                    <Ionicons name="sparkles" size={12} color={colors.primary} />
+                    <Text style={[styles.memoryChipText, { color: colors.primary }]}>{m}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <Text style={[styles.memoryLabel, { color: colors.textSecondary, marginTop: spacing.lg }]}>CONVERSATIONS</Text>
+            {chatHistory.length === 0 ? (
+              <View style={styles.historyEmpty}>
+                <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textLight} />
+                <Text style={[styles.historyEmptyText, { color: colors.textSecondary }]}>No past conversations yet</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={chatHistory}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => loadConversation(item)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.historyIcon, { backgroundColor: colors.softPurple }]}>
+                      <Ionicons name="chatbubbles" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.historyInfo}>
+                      <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                      <Text style={[styles.historyMeta, { color: colors.textSecondary }]}>
+                        {item.count} msgs · {new Date(item.date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
       </KeyboardAvoidingView>
     </AuroraBackground>
   );
@@ -768,4 +889,28 @@ const styles = StyleSheet.create({
   micBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   continuousToggle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalSheet: {
+    borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl,
+    padding: spacing.lg, paddingBottom: spacing.xxl, maxHeight: '80%', borderWidth: 1,
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
+  modalTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  modalSubtitle: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  modalClose: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  memorySection: { borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, gap: spacing.sm },
+  memoryLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+  memoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  memoryChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: borderRadius.full },
+  memoryChipText: { fontSize: 12, fontWeight: '600' },
+  historyEmpty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
+  historyEmptyText: { fontSize: 14, fontWeight: '600' },
+  historyRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, marginBottom: spacing.sm,
+  },
+  historyIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  historyInfo: { flex: 1 },
+  historyTitle: { fontSize: 14, fontWeight: '600' },
+  historyMeta: { fontSize: 12, marginTop: 2 },
 });

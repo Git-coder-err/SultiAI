@@ -178,7 +178,7 @@ export default React.memo(function AIAvatar({ size = 80, mood = 'neutral' }) {
 
   return (
     <Animated.View
-      style={[styles.container, { width: size, height: size, shadowColor: colors.primary }, containerStyle]}
+      style={[styles.container, { width: size, height: size }, containerStyle]}
       accessibilityLabel={`Sulti avatar, mood is ${mood}`}
       accessibilityRole="image"
     >
@@ -253,9 +253,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    boxShadow: '0 4px 12px rgba(20,184,166,0.3)',
     elevation: 6,
   },
 });

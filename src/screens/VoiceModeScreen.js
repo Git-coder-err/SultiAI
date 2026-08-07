@@ -8,11 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue, withTiming, FadeInDown,
 } from 'react-native-reanimated';
+import { XP_VALUES } from '../constants';
+import { useAccessibility } from '../hooks/useAccessibility';
 import {
-  useAudioRecorder, useAudioRecorderState, RecordingPresets,
-  requestRecordingPermissionsAsync, setAudioModeAsync, useAudioSampleListener,
+  useAudioStream, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioSampleListener,
 } from 'expo-audio';
-import { File } from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import VoiceBackground from '../components/voice/VoiceBackground';
@@ -23,11 +23,15 @@ import SuggestedChips from '../components/voice/SuggestedChips';
 import VoiceControls from '../components/voice/VoiceControls';
 import SettingsSheet from '../components/voice/SettingsSheet';
 import XpToast from '../components/voice/XpToast';
-import { UserMessage, HoyMessage, TypingIndicator } from '../components/voice/MessageBubble';
+import { UserMessage, SultiMessage, TypingIndicator } from '../components/voice/MessageBubble';
 import { voice } from '../components/voice/palette';
 import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
 import { speakTTS, stopTTS, setTTSMuted, getAudioPlayer } from '../utils/tts';
+import { playRealtimePcm } from '../utils/realtimeAudio';
+import {
+  VoiceRealtimeSession, fetchVoiceAgentConfig, encodePcm16ToBase64, encodeWavBase64, resampleInt16, REALTIME_INPUT_RATE,
+} from '../services/voiceAgent';
 import {
   hapticMicStart, hapticMicEnd, hapticAIBeginsSpeaking, hapticAIFinished,
   hapticError, hapticTap, hapticXpGain, setHapticsEnabled,
@@ -41,18 +45,13 @@ const PREFS = {
   slow: 'voice_slow',
   muted: 'voice_muted',
   lang: 'voice_lang',
+  character: 'voice_character',
 };
-
-function normalizeMetering(m) {
-  if (m == null || Number.isNaN(m)) return 0;
-  if (m > 1) return Math.max(0, Math.min(1, m / 32767));
-  if (m < 0) return Math.max(0, Math.min(1, (m + 60) / 60));
-  return Math.max(0, Math.min(1, m));
-}
 
 export default function VoiceModeScreen({ navigation }) {
   const { addXp, streak } = useGame();
   const insets = useSafeAreaInsets();
+  const { reduceMotion, getAnimationDuration } = useAccessibility();
 
   const [orbState, setOrbState] = useState('idle');
   const [conversation, setConversation] = useState([]);
@@ -67,25 +66,80 @@ export default function VoiceModeScreen({ navigation }) {
   const [language, setLanguage] = useState('bisaya');
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [xpToastVisible, setXpToastVisible] = useState(false);
-
-  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
-  const recorderState = useAudioRecorderState(audioRecorder);
+  const [selectedCharacter, setSelectedCharacter] = useState('blessica');
 
   const amplitude = useSharedValue(0);
   const listRef = useRef(null);
   const isRecordingRef = useRef(false);
   const isSpeakingRef = useRef(false);
+  const isConnectingRef = useRef(false);
+  const voiceSessionRef = useRef(null);
+  const transcriptRef = useRef('');
+  const audioRef = useRef('');
+  const handleRealtimeEventRef = useRef(null);
+  const startRecordingRef = useRef(null);
   const sessionIdRef = useRef(null);
   const continuousRef = useRef(false);
   const mutedRef = useRef(false);
   const slowRef = useRef(false);
   const langRef = useRef('bisaya');
+  const characterRef = useRef('blessica');
   const lastSampleAt = useRef(0);
   const lastReplyRef = useRef('');
   const durationTimer = useRef(null);
   const xpTimer = useRef(null);
   const restartTimer = useRef(null);
   const stopRecordingRef = useRef(null);
+  const abortRecordingRef = useRef(null);
+  const localModeRef = useRef(false);
+  const audioChunksRef = useRef(null);
+
+  const handleStreamBuffer = useCallback((buffer) => {
+    try {
+      if (buffer && buffer.data) {
+        const session = voiceSessionRef.current;
+        if (session && session.isOpen()) {
+          let data = buffer.data;
+          if (buffer.sampleRate && buffer.sampleRate !== REALTIME_INPUT_RATE) {
+            data = resampleInt16(data, buffer.sampleRate, REALTIME_INPUT_RATE);
+          }
+          session.appendAudio(encodePcm16ToBase64(data));
+        }
+
+        // Accumulate audio chunks for local mode
+        if (localModeRef.current && audioChunksRef.current) {
+          const existing = audioChunksRef.current;
+          const newData = new Uint8Array(existing.length + buffer.data.byteLength / 2);
+          newData.set(new Int16Array(existing.buffer), 0);
+          const newChunk = new Int16Array(buffer.data.buffer, buffer.data.byteOffset, buffer.data.byteLength / 2);
+          newData.set(newChunk, existing.length);
+          audioChunksRef.current = newData;
+        }
+
+        const bytes = new Uint8Array(buffer.data);
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const step = Math.max(1, Math.floor(bytes.byteLength / 2 / 128));
+        let sum = 0;
+        let n = 0;
+        for (let i = 0; i + 1 < bytes.byteLength; i += step * 2) {
+          const v = view.getInt16(i, true) / 32768;
+          sum += v * v;
+          n++;
+        }
+        const rms = n ? Math.sqrt(sum / n) : 0;
+        amplitude.value = Math.min(1, rms * 4);
+        lastSampleAt.current = Date.now();
+      }
+    } catch {}
+  }, [amplitude]);
+
+  const audioStream = useAudioStream({
+    channels: 1,
+    encoding: 'int16',
+    sampleRate: REALTIME_INPUT_RATE,
+    onBuffer: handleStreamBuffer,
+  });
+  const { stream: audioStreamObj } = audioStream;
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -103,22 +157,29 @@ export default function VoiceModeScreen({ navigation }) {
     langRef.current = language;
   }, [language]);
 
+  const charRef = useRef('blessica');
+  useEffect(() => {
+    charRef.current = selectedCharacter;
+  }, [selectedCharacter]);
+
   // Restore persisted preferences
   useEffect(() => {
     (async () => {
       try {
-        const [h, c, s, m, l] = await Promise.all([
+        const [h, c, s, m, l, ch] = await Promise.all([
           AsyncStorage.getItem(PREFS.haptics),
           AsyncStorage.getItem(PREFS.continuous),
           AsyncStorage.getItem(PREFS.slow),
           AsyncStorage.getItem(PREFS.muted),
           AsyncStorage.getItem(PREFS.lang),
+          AsyncStorage.getItem(PREFS.character),
         ]);
         if (h !== null) setHapticsEnabledState(h === '1');
         if (c !== null) setContinuous(c === '1');
         if (s !== null) setSlowMode(s === '1');
         if (m !== null) setMuted(m === '1');
         if (l !== null) setLanguage(l);
+        if (ch !== null) setSelectedCharacter(ch);
       } catch {}
     })();
   }, []);
@@ -142,6 +203,10 @@ export default function VoiceModeScreen({ navigation }) {
   useEffect(() => {
     AsyncStorage.setItem(PREFS.lang, language).catch(() => {});
   }, [language]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(PREFS.character, selectedCharacter).catch(() => {});
+  }, [selectedCharacter]);
 
   // Real-time audio level: mic metering while listening, TTS samples while speaking
   const handleSample = useCallback((sample) => {
@@ -169,16 +234,9 @@ export default function VoiceModeScreen({ navigation }) {
   useEffect(() => {
     let timer = null;
     if (orbState === 'listening') {
-      timer = setInterval(async () => {
-        let level;
-        try {
-          const status = await audioRecorder.getStatus();
-          level = status && status.metering;
-        } catch {}
-        if (level == null) {
-          amplitude.value = 0.18 + 0.3 * Math.abs(Math.sin(Date.now() / 260));
-        } else {
-          amplitude.value = Math.max(0.05, normalizeMetering(level));
+      timer = setInterval(() => {
+        if (Date.now() - lastSampleAt.current > 300) {
+          amplitude.value = 0.12 + 0.22 * Math.abs(Math.sin(Date.now() / 240));
         }
       }, 90);
     } else if (orbState === 'speaking') {
@@ -190,20 +248,20 @@ export default function VoiceModeScreen({ navigation }) {
         }
       }, 50);
     } else if (orbState === 'thinking') {
-      amplitude.value = withTiming(0.08, { duration: 300 });
+      amplitude.value = withTiming(0.08, { duration: getAnimationDuration(300) });
     } else {
-      amplitude.value = withTiming(0, { duration: 500 });
+      amplitude.value = withTiming(0, { duration: getAnimationDuration(500) });
     }
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [orbState, audioRecorder, amplitude]);
+  }, [orbState, amplitude]);
 
-  // Stop recording if the app goes to the background
+  // Stop the mic stream if the app goes to the background
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next !== 'active' && isRecordingRef.current) {
-        stopRecordingRef.current && stopRecordingRef.current();
+        abortRecordingRef.current && abortRecordingRef.current();
       }
     });
     return () => sub.remove();
@@ -215,10 +273,114 @@ export default function VoiceModeScreen({ navigation }) {
       if (restartTimer.current) clearTimeout(restartTimer.current);
       if (xpTimer.current) clearTimeout(xpTimer.current);
       stopTTS();
+      try { audioStreamObj && audioStreamObj.stop(); } catch {}
+      const session = voiceSessionRef.current;
+      if (session) {
+        try { session.close(); } catch {}
+        voiceSessionRef.current = null;
+      }
     };
+  }, [audioStreamObj]);
+
+  const addMessage = useCallback((role, text, pronunciation) => {
+    setConversation((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${Math.random()}`, role, text, pronunciation },
+    ]);
+    setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 150);
   }, []);
 
+  const finishRealtimeTurn = useCallback(({ transcript, audio }) => {
+    if (!audio && !transcript) {
+      setOrbState('idle');
+      return;
+    }
+    setHasSpoken(true);
+    if (transcript) addMessage('assistant', transcript, null);
+    else addMessage('assistant', 'SULTI!', null);
+
+    const session = voiceSessionRef.current;
+    if (session) {
+      try { session.close(); } catch {}
+      voiceSessionRef.current = null;
+    }
+
+    const finish = () => {
+      setOrbState('idle');
+      hapticAIFinished();
+      if (continuousRef.current && !isRecordingRef.current) {
+        restartTimer.current = setTimeout(() => startRecordingRef.current && startRecordingRef.current(), 650);
+      }
+    };
+
+    setOrbState('speaking');
+    hapticAIBeginsSpeaking();
+    if (mutedRef.current || !audio) {
+      setTimeout(finish, Math.min(1500, 400 + (transcript || '').length * 40));
+    } else {
+      playRealtimePcm(audio, REALTIME_INPUT_RATE, { onDone: finish, onError: finish });
+    }
+
+    addXp(XP_VALUES.VOICE_PRACTICE_TURN, 'voice_practice');
+    setXpToastVisible(true);
+    hapticXpGain();
+    if (xpTimer.current) clearTimeout(xpTimer.current);
+    xpTimer.current = setTimeout(() => setXpToastVisible(false), 2400);
+  }, [addMessage, addXp]);
+
+  const handleRealtimeEvent = useCallback((event) => {
+    if (!event || !event.type) return;
+    switch (event.type) {
+      case 'conversation.item.input_audio_transcription.completed': {
+        const content = event.item && event.item.content;
+        const transcript = content && content[0] && content[0].transcript;
+        if (transcript && transcript.trim()) {
+          addMessage('user', transcript, null);
+        }
+        break;
+      }
+      case 'response.output_audio_transcript.delta':
+        transcriptRef.current += event.delta || '';
+        break;
+      case 'response.output_audio.delta':
+        audioRef.current += event.delta || '';
+        break;
+      case 'response.done':
+        finishRealtimeTurn({ transcript: transcriptRef.current, audio: audioRef.current });
+        transcriptRef.current = '';
+        audioRef.current = '';
+        break;
+      case 'error':
+        console.warn('Realtime session error:', event.error);
+        if (!isRecordingRef.current) {
+          setOrbState('idle');
+          hapticError();
+        }
+        break;
+      default:
+        break;
+    }
+  }, [addMessage, finishRealtimeTurn]);
+
+  const abortRecording = useCallback(() => {
+    isRecordingRef.current = false;
+    setRecording(false);
+    if (durationTimer.current) {
+      clearInterval(durationTimer.current);
+      durationTimer.current = null;
+    }
+    try { audioStreamObj && audioStreamObj.stop(); } catch {}
+    const session = voiceSessionRef.current;
+    if (session) {
+      try { session.close(); } catch {}
+      voiceSessionRef.current = null;
+    }
+    setOrbState('idle');
+  }, [audioStreamObj]);
+
   const startRecording = useCallback(async () => {
+    if (isConnectingRef.current || isRecordingRef.current) return;
+    isConnectingRef.current = true;
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
@@ -226,8 +388,39 @@ export default function VoiceModeScreen({ navigation }) {
         return;
       }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
+
+      setOrbState('thinking');
+
+      // Try realtime mode first; fall back to local mode
+      let useLocalMode = false;
+      try {
+        const config = await fetchVoiceAgentConfig();
+        if (!config.url || !config.token) {
+          useLocalMode = true;
+        } else {
+          const session = new VoiceRealtimeSession({
+            url: config.url,
+            token: config.token,
+            onEvent: (e) => handleRealtimeEventRef.current && handleRealtimeEventRef.current(e),
+            onError: () => {},
+            onClose: () => {},
+          });
+          await session.open();
+          session.configure(config.session);
+          voiceSessionRef.current = session;
+        }
+      } catch (e) {
+        useLocalMode = true;
+      }
+
+      localModeRef.current = useLocalMode;
+      if (useLocalMode) {
+        audioChunksRef.current = new Uint8Array(0);
+      }
+
+      await audioStreamObj.start();
+      transcriptRef.current = '';
+      audioRef.current = '';
       isRecordingRef.current = true;
       setRecording(true);
       setRecordingDuration(0);
@@ -240,9 +433,11 @@ export default function VoiceModeScreen({ navigation }) {
       setRecording(false);
       setOrbState('idle');
       hapticError();
-      Alert.alert('Error', 'Could not start recording.');
+      Alert.alert('Error', 'Could not start the voice session. Check that the server is reachable.');
+    } finally {
+      isConnectingRef.current = false;
     }
-  }, [audioRecorder]);
+  }, [audioStreamObj]);
 
   const speakReply = useCallback((text, rate = 0.85) => {
     stopTTS();
@@ -251,6 +446,7 @@ export default function VoiceModeScreen({ navigation }) {
     setOrbState('speaking');
     hapticAIBeginsSpeaking();
     speakTTS(text, {
+      voice: charRef.current,
       language: langRef.current === 'bisaya' ? 'ceb' : 'en-US',
       rate,
       onDone: () => {
@@ -258,7 +454,7 @@ export default function VoiceModeScreen({ navigation }) {
         setOrbState('idle');
         hapticAIFinished();
         if (continuousRef.current && !isRecordingRef.current) {
-          restartTimer.current = setTimeout(() => startRecording(), 650);
+          restartTimer.current = setTimeout(() => startRecordingRef.current && startRecordingRef.current(), 650);
         }
       },
       onError: () => {
@@ -267,14 +463,6 @@ export default function VoiceModeScreen({ navigation }) {
         hapticAIFinished();
       },
     });
-  }, [startRecording]);
-
-  const addMessage = useCallback((role, text, pronunciation) => {
-    setConversation((prev) => [
-      ...prev,
-      { id: `${Date.now()}-${Math.random()}`, role, text, pronunciation },
-    ]);
-    setTimeout(() => listRef.current && listRef.current.scrollToEnd({ animated: true }), 150);
   }, []);
 
   const handleAiResponse = useCallback((data) => {
@@ -288,7 +476,7 @@ export default function VoiceModeScreen({ navigation }) {
       setHasSpoken(true);
       addMessage('assistant', data.reply, null);
       speakReply(data.reply, slowRef.current ? 0.55 : 0.85);
-      addXp(15, 'voice_practice');
+      addXp(XP_VALUES.VOICE_PRACTICE_TURN, 'voice_practice');
       setXpToastVisible(true);
       hapticXpGain();
       if (xpTimer.current) clearTimeout(xpTimer.current);
@@ -299,7 +487,7 @@ export default function VoiceModeScreen({ navigation }) {
   }, [addXp, speakReply]);
 
   const stopRecording = useCallback(async () => {
-    if (!isRecordingRef.current && !recorderState.isRecording) return;
+    if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
     setRecording(false);
     if (durationTimer.current) {
@@ -308,33 +496,74 @@ export default function VoiceModeScreen({ navigation }) {
     }
     setOrbState('thinking');
     hapticMicEnd();
-
     try {
-      if (recorderState.isRecording) await audioRecorder.stop();
-      const uri = audioRecorder.uri;
-      if (!uri) {
-        setOrbState('idle');
-        return;
-      }
-      const audioFile = new File(uri);
-      const audioBase64 = await audioFile.base64();
-      if (!audioBase64 || audioBase64.length < 100) {
-        setOrbState('idle');
-        return;
-      }
+      audioStreamObj.stop();
+    } catch {}
 
-      const data = await api.tutorChat('', audioBase64, sessionIdRef.current);
-      handleAiResponse(data);
-    } catch (e) {
-      setOrbState('idle');
-      hapticError();
-      Alert.alert('Error', 'Could not process your voice. Please try again.');
+    if (localModeRef.current) {
+      // Local mode: send accumulated audio to server for transcription + LLM + TTS
+      const chunks = audioChunksRef.current;
+      audioChunksRef.current = null;
+      if (!chunks || chunks.length === 0) {
+        setOrbState('idle');
+        return;
+      }
+      try {
+        // Encode as WAV for the server's STT service
+        const wavBase64 = encodeWavBase64(chunks, REALTIME_INPUT_RATE);
+        const data = await api.tutorChat(null, wavBase64, sessionIdRef.current);
+        localModeRef.current = false;
+
+        if (data.session_id) setSessionId(data.session_id);
+
+        if (data.transcription) {
+          addMessage('user', data.transcription, data.pronunciation || null);
+        }
+
+        if (data.reply) {
+          setHasSpoken(true);
+          addMessage('assistant', data.reply, null);
+          speakReply(data.reply, slowRef.current ? 0.55 : 0.85);
+          addXp(XP_VALUES.VOICE_PRACTICE_TURN, 'voice_practice');
+          setXpToastVisible(true);
+          hapticXpGain();
+          if (xpTimer.current) clearTimeout(xpTimer.current);
+          xpTimer.current = setTimeout(() => setXpToastVisible(false), 2400);
+        } else {
+          setOrbState('idle');
+        }
+      } catch (e) {
+        console.error('Local audio processing error:', e);
+        localModeRef.current = false;
+        setOrbState('idle');
+        hapticError();
+        Alert.alert('Error', 'Could not process the voice message. The local models may not be loaded yet.');
+      }
+    } else {
+      const session = voiceSessionRef.current;
+      if (session) {
+        session.commitAndRespond();
+      } else {
+        setOrbState('idle');
+      }
     }
-  }, [audioRecorder, recorderState.isRecording, handleAiResponse]);
+  }, [audioStreamObj, addMessage, addXp, speakReply]);
+
+  useEffect(() => {
+    handleRealtimeEventRef.current = handleRealtimeEvent;
+  });
+
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
 
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
   }, [stopRecording]);
+
+  useEffect(() => {
+    abortRecordingRef.current = abortRecording;
+  }, [abortRecording]);
 
   const sendText = useCallback(async (message) => {
     if (isSpeakingRef.current) stopTTS();
@@ -362,9 +591,9 @@ export default function VoiceModeScreen({ navigation }) {
       hapticTap();
       return;
     }
-    if (isRecordingRef.current || recorderState.isRecording) stopRecording();
+    if (isRecordingRef.current || isConnectingRef.current) stopRecording();
     else startRecording();
-  }, [startRecording, stopRecording, recorderState.isRecording]);
+  }, [startRecording, stopRecording]);
 
   const replayLast = useCallback(() => {
     if (!lastReplyRef.current) return;
@@ -394,9 +623,14 @@ export default function VoiceModeScreen({ navigation }) {
     stopTTS();
     isSpeakingRef.current = false;
     isRecordingRef.current = false;
-    if (recorderState.isRecording) audioRecorder.stop().catch(() => {});
+    try { audioStreamObj && audioStreamObj.stop(); } catch {}
+    const session = voiceSessionRef.current;
+    if (session) {
+      try { session.close(); } catch {}
+      voiceSessionRef.current = null;
+    }
     navigation.goBack();
-  }, [audioRecorder, recorderState.isRecording, navigation]);
+  }, [audioStreamObj, navigation]);
 
   const onSuggestion = useCallback((label) => {
     hapticTap();
@@ -414,7 +648,7 @@ export default function VoiceModeScreen({ navigation }) {
       return <UserMessage text={item.text} pronunciation={item.pronunciation} />;
     }
     const isLast = index === conversation.length - 1;
-    return <HoyMessage text={item.text} speaking={orbState === 'speaking' && isLast} onSpeak={speakCard} />;
+    return <SultiMessage text={item.text} speaking={orbState === 'speaking' && isLast} onSpeak={speakCard} />;
   }, [orbState, speakCard, conversation.length]);
 
   const isThinking = orbState === 'thinking';
@@ -430,7 +664,7 @@ export default function VoiceModeScreen({ navigation }) {
             </View>
           </TouchableOpacity>
           <View style={styles.topTitleWrap} accessibilityRole="header">
-            <Text style={styles.topTitle}>Hoy</Text>
+            <Text style={styles.topTitle}>SULTI</Text>
             <Text style={styles.topSubtitle}>Voice Tutor</Text>
           </View>
           <TouchableOpacity
@@ -451,7 +685,7 @@ export default function VoiceModeScreen({ navigation }) {
         {/* Main content */}
         {inConversation ? (
           <View style={styles.convLayout}>
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.convOrbZone}>
+            <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)} style={styles.convOrbZone}>
               <StatusPill state={orbState} />
               <View style={styles.convOrb}>
                 <VoiceOrb state={orbState} size={ORB_TALK} amplitude={amplitude} onPress={toggleRecording} />
@@ -466,7 +700,7 @@ export default function VoiceModeScreen({ navigation }) {
               ListFooterComponent={orbState === 'thinking' ? <TypingIndicator /> : null}
               onContentSizeChange={() => listRef.current && listRef.current.scrollToEnd({ animated: true })}
               showsVerticalScrollIndicator={false}
-              accessibilityLabel="Conversation with Hoy"
+              accessibilityLabel="Conversation with SULTI"
             />
           </View>
         ) : (
@@ -523,6 +757,8 @@ export default function VoiceModeScreen({ navigation }) {
           onHaptics={setHapticsEnabledState}
           onContinuous={setContinuous}
           onSlow={setSlowMode}
+          selectedCharacter={selectedCharacter}
+          onCharacterChange={setSelectedCharacter}
         />
       </VoiceBackground>
     </View>

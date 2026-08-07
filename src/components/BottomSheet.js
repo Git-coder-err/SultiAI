@@ -27,7 +27,7 @@ export default function BottomSheet({ visible, onClose, title, children, height 
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay} pointerEvents={visible ? 'auto' : 'none'}>
+    <View style={[styles.overlay, { pointerEvents: visible ? 'auto' : 'none' }]}>
       <TouchableWithoutFeedback onPress={onClose}>
         <Animated.View style={[styles.backdrop, { backgroundColor: colors.overlay, opacity: backdropOpacity }]} />
       </TouchableWithoutFeedback>

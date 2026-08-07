@@ -6,6 +6,8 @@ import { UserProvider } from './src/context/UserContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { GameProvider } from './src/context/GameContext';
 import { ToastProvider } from './src/components/Toast';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import { LevelUpCelebration } from './src/components';
 import AppNavigator from './src/navigation/AppNavigator';
 
 function AppContent() {
@@ -16,6 +18,7 @@ function AppContent() {
       <GameProvider>
         <ToastProvider>
           <AppNavigator />
+          <LevelUpCelebration />
         </ToastProvider>
       </GameProvider>
     </>
@@ -28,7 +31,9 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <UserProvider>
-            <AppContent />
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
           </UserProvider>
         </ThemeProvider>
       </SafeAreaProvider>

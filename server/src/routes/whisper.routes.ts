@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
-import { isGroqConfigured, groqChat, groqTranscribeAudio, groqJson } from '../utils/groq';
+import { isConfigured, groqChat, groqTranscribeAudio, groqJson } from '../utils/groq';
 
 const router = Router();
 
@@ -15,6 +15,7 @@ const LANGUAGE_META: Record<string, { name: string; native: string; region: stri
   pangasinan: { name: 'Pangasinan', native: 'Pangasinan', region: 'Pangasinan', code: 'pag' },
 };
 
+// Legacy per-dialect prompts, kept for reference. Chat/voice now use the auto-detect teacher prompt below.
 const LANGUAGE_PROMPTS: Record<string, string> = {
   tagalog: 'You are "Whisper AI", a warm and patient Tagalog language tutor for learners of Philippine dialects!\n\nAbout Tagalog:\n- Tagalog is the basis for Filipino, the national language of the Philippines\n- Spoken primarily in Metro Manila and Central/Southern Luzon\n- Over 28 million native speakers\n\nYour Teaching Mission:\n- Teach practical Tagalog phrases for everyday situations\n- Provide phonetic pronunciation guides (e.g., "Kumusta ka?" = "koo-moos-TAH kah?")\n- Show both formal and casual Tagalog\n- Include cultural context and usage tips\n- Keep responses friendly, encouraging, and practical\n- Always include English translations\n- Use emojis to make learning fun\n\nTagalog basics to teach:\n- "Kumusta ka?" = "How are you?"\n- "Salamat" = "Thank you"\n- "Magandang umaga" = "Good morning"\n- "Oo" / "Hindi" = "Yes" / "No"\n- "Paalam" = "Goodbye"',
 
@@ -33,6 +34,36 @@ const LANGUAGE_PROMPTS: Record<string, string> = {
   pangasinan: 'You are "Whisper AI", a warm and patient Pangasinan language tutor for learners of Philippine dialects!\n\nAbout Pangasinan:\n- Pangasinan is spoken in the province of Pangasinan\n- Over 1 million native speakers\n- One of the oldest Philippine languages with a rich literary tradition\n\nYour Teaching Mission:\n- Teach practical Pangasinan phrases for everyday situations\n- Provide phonetic pronunciation guides\n- Include cultural context and usage tips\n- Keep responses friendly, encouraging, and practical\n- Always include English translations\n\nPangasinan basics to teach:\n- "Kumusta ka?" = "How are you?"\n- "Salamat" = "Thank you"\n- "Masantos ya kabwasan" = "Good morning"\n- "On" / "Andi" = "Yes" / "No"',
 };
 
+function getTeacherPrompt(target: string): string {
+  return `You are "Sulti Whisper", an encouraging Philippine language teacher. You teach ${target} to learners who may speak ANY Philippine language, English, or a mix.
+
+YOUR TASK for every user message (typed or transcribed from voice):
+1. AUTO-DETECT the language/dialect the user actually wrote or spoke. Candidates: English, Tagalog, Taglish (Tagalog-English mix), Bisaya/Cebuano, Ilocano, Hiligaynon/Ilonggo, Bikol, Waray, Kapampangan, Pangasinan, or a mix.
+2. Gently ACKNOWLEDGE them. If they spoke in another language, CORRECT by giving the natural ${target} version. If they were already correct or partly correct in ${target}, affirm and polish it.
+3. TEACH: break down 2-4 key ${target} words/phrases with meanings and usage notes, comparing to the word the learner used (e.g., English/Tagalog word -> ${target} word).
+4. ENGAGE: end with a short follow-up question or practice prompt in ${target}.
+
+FORMAT EVERY RESPONSE EXACTLY LIKE THIS (no other preamble; first line is always the detection):
+🗣️ Detected: <language or mix detected>
+💡 In ${target}: "<natural ${target} translation or response>"
+📚 Breakdown:
+• <word> = <meaning> (<how to use it>)
+• <word> = <meaning> (<how to use it>)
+💬 Sulti: <1-2 warm conversational sentences, ending with a simple question in ${target} followed by an English gloss in parentheses>
+
+RULES:
+- If the user already wrote in ${target}, replace the translation line with a praise line like "💡 Nice! Nindot kaayo!" and still teach 2-3 words from what they said.
+- Correct gently, never criticize. Match the learner's energy.
+- Use ${target} words with diacritics where appropriate.
+- Keep the whole response concise and scannable.`;
+}
+
+function extractDetectedLanguage(reply: string): string | null {
+  const firstLine = (reply.split('\n')[0] || '').replace(/^\s*🗣️?\s*/i, '');
+  const m = firstLine.match(/^Detected:\s*(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
 router.post('/chat', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { message, language } = req.body || {};
@@ -40,20 +71,20 @@ router.post('/chat', authMiddleware, async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Message is required' });
       return;
     }
-    if (!isGroqConfigured()) {
-      res.status(500).json({ error: 'Groq API key not configured' });
+    if (!isConfigured()) {
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
       return;
     }
 
     const langMeta = LANGUAGE_META[language] || LANGUAGE_META.cebuano;
-    const systemPrompt = LANGUAGE_PROMPTS[language] || LANGUAGE_PROMPTS.cebuano;
+    const targetName = langMeta.native || langMeta.name;
 
     const reply = await groqChat([
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: getTeacherPrompt(targetName) },
       { role: 'user', content: message },
-    ], { temperature: 0.8, maxTokens: 800 });
+    ], { temperature: 0.8, maxTokens: 900 });
 
-    res.json({ reply, language: langMeta });
+    res.json({ reply, detected: extractDetectedLanguage(reply), language: langMeta });
   } catch (err) {
     console.error('Whisper AI chat error:', err);
     res.status(500).json({ error: 'Whisper AI request failed' });
@@ -67,8 +98,8 @@ router.post('/voice', authMiddleware, async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Audio data is required' });
       return;
     }
-    if (!isGroqConfigured()) {
-      res.status(500).json({ error: 'Groq API key not configured' });
+    if (!isConfigured()) {
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
       return;
     }
 
@@ -85,14 +116,14 @@ router.post('/voice', authMiddleware, async (req: Request, res: Response) => {
     }
 
     const langMeta = LANGUAGE_META[language] || LANGUAGE_META.cebuano;
-    const systemPrompt = LANGUAGE_PROMPTS[language] || LANGUAGE_PROMPTS.cebuano;
+    const targetName = langMeta.native || langMeta.name;
 
     const reply = await groqChat([
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: getTeacherPrompt(targetName) },
       { role: 'user', content: transcription },
-    ], { temperature: 0.8, maxTokens: 800 });
+    ], { temperature: 0.8, maxTokens: 900 });
 
-    res.json({ transcription, reply, language: langMeta });
+    res.json({ transcription, reply, detected: extractDetectedLanguage(reply), language: langMeta });
   } catch (err) {
     console.error('Whisper AI voice error:', err);
     res.status(500).json({ error: 'Whisper AI voice request failed' });
@@ -106,8 +137,8 @@ router.post('/phrases', authMiddleware, async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Topic and language are required' });
       return;
     }
-    if (!isGroqConfigured()) {
-      res.status(500).json({ error: 'Groq API key not configured' });
+    if (!isConfigured()) {
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
       return;
     }
 

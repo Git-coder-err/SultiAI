@@ -28,7 +28,13 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={{ showToast, success, error, info, warning }}>
       {children}
-      <View style={[styles.container, { top: insets.top + 10 }]} pointerEvents="box-none">
+      <View
+        style={[
+          styles.container,
+          { top: insets.top + 10 },
+          Platform.OS === 'web' ? { pointerEvents: 'box-none' } : { pointerEvents: 'none' },
+        ]}
+      >
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} colors={colors} />
         ))}
@@ -72,6 +78,12 @@ export function useToast() {
 
 const styles = StyleSheet.create({
   container: { position: 'absolute', left: 16, right: 16, zIndex: 9999 },
-  toast: { flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.md, padding: spacing.lg, marginBottom: spacing.sm, borderLeftWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 6 },
+  toast: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: borderRadius.md, padding: spacing.lg, marginBottom: spacing.sm, borderLeftWidth: 4,
+    ...Platform.select({
+      web: { boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)' },
+      default: { boxShadow: '0 2px 8px rgba(0,0,0,0.15)', elevation: 6 },
+    }),
+  },
   text: { fontSize: 14, fontWeight: '500', flex: 1 },
 });

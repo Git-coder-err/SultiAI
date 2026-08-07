@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from '
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
+import { XP_VALUES } from '../constants';
 import { useGame } from '../context/GameContext';
+import { useOfflineSync } from '../hooks/useOfflineSync';
 import { api } from '../services/api';
 import Header from '../components/Header';
 import Button from '../components/Button';
@@ -16,6 +18,7 @@ const { width } = Dimensions.get('window');
 export default function FlashcardsScreen({ navigation }) {
   const { colors } = useTheme();
   const { addXp } = useGame();
+  const { enqueueAction, isOnline } = useOfflineSync();
   const [phrases, setPhrases] = useState([]);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -51,11 +54,27 @@ export default function FlashcardsScreen({ navigation }) {
 
   const markKnown = () => {
     setKnownCount(k => k + 1);
-    addXp(10, 'flashcard');
+    addXp(XP_VALUES.FLASHCARD_KNOWN, 'flashcard');
+    const currentPhrase = phrases[index];
+    if (currentPhrase) {
+      enqueueAction({
+        endpoint: '/api/v2/vocabulary/review',
+        method: 'POST',
+        payload: { word: currentPhrase.phrase || currentPhrase.bisaya, quality: 4 },
+      });
+    }
     nextCard();
   };
 
   const markUnknown = () => {
+    const currentPhrase = phrases[index];
+    if (currentPhrase) {
+      enqueueAction({
+        endpoint: '/api/v2/vocabulary/review',
+        method: 'POST',
+        payload: { word: currentPhrase.phrase || currentPhrase.bisaya, quality: 1 },
+      });
+    }
     nextCard();
   };
 
@@ -130,7 +149,7 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 2 },
   cardContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl },
   cardTouchable: { width: '100%', maxWidth: 340, aspectRatio: 0.7 },
-  card: { position: 'absolute', width: '100%', height: '100%', borderRadius: borderRadius.xl, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 16 },
+  card: { position: 'absolute', width: '100%', height: '100%', borderRadius: borderRadius.xl, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl, elevation: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' },
   cardBack: { backgroundColor: '#E8F4F8' },
   cardText: { fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: spacing.md, lineHeight: 32 },
   category: { fontSize: 13, fontWeight: '600', marginBottom: spacing.sm },

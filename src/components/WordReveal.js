@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay,
+  useSharedValue, useAnimatedStyle, withTiming, withSequence, withDelay, withRepeat,
 } from 'react-native-reanimated';
 
 export default function WordReveal({ text, style, speed = 40, onComplete, showCursor = false }) {

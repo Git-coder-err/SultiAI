@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { voice } from './palette';
@@ -16,11 +17,13 @@ export default function Greeting({ visible, hasSpoken }) {
       accessibilityRole="text"
     >
       <Animated.View entering={FadeInDown.duration(600).delay(300)} style={styles.emojiRow}>
-        <Text style={styles.emoji} accessibilityElementsHidden>👋</Text>
+        <View style={styles.emojiCircle}>
+          <Ionicons name="hand-left" size={26} color={voice.primary} />
+        </View>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(600).delay(450)} style={styles.titleRow}>
-        <Text style={styles.title}>Hi! I'm Hoy</Text>
+        <Text style={styles.title}>Hi! I'm SULTI</Text>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(600).delay(600)} style={styles.subtitleRow}>
@@ -43,7 +46,14 @@ export default function Greeting({ visible, hasSpoken }) {
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', paddingHorizontal: 32 },
   emojiRow: { marginBottom: 6 },
-  emoji: { fontSize: 30 },
+  emojiCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(45,212,191,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   titleRow: { marginBottom: 8 },
   title: {
     fontSize: 26,

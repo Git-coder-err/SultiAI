@@ -15,6 +15,8 @@ Unlike traditional translation applications that simply convert words from one l
 
 The project is designed to help non-native speakers communicate more naturally and confidently in everyday situations such as schools, workplaces, public transportation, restaurants, hospitals, and government offices.
 
+**SultiAI can run completely offline with no API keys required!**
+
 ---
 
 ## 📌 Table of Contents
@@ -291,6 +293,42 @@ sultiai/
 
 ---
 
+## 🌐 Local Mode (No API Keys Required!)
+
+SultiAI can run entirely offline with local ONNX models. No API keys, no external services, no internet required after initial setup.
+
+### Quick Start (Local Mode)
+
+```bash
+# 1. Download local AI models (one-time, ~1GB total)
+cd server && npm run models
+
+# 2. Start the server (no .env or API keys needed!)
+cd server && npm run dev
+
+# 3. Start the frontend
+cd .. && npm start
+```
+
+### Local Models Included
+
+| Model | Size | Purpose |
+|-------|------|---------|
+| TinyLlama 1.1B | ~600MB | Chat responses & language tutoring |
+| Whisper Tiny | ~300MB | Speech-to-text transcription |
+| Windows TTS | Built-in | Character-based voice synthesis |
+
+### Character Voices (Local TTS)
+
+SultiAI includes 4 character voices powered by Windows built-in TTS (no API needed):
+
+- **Blessica** - Warm, friendly female voice (default Sulti persona)
+- **Angel** - Clear, patient male voice
+- **Sultan** - Authoritative male voice with cultural gravitas
+- **Lola** - Gentle, wise elder female voice
+
+---
+
 ## 📊 Comparison: Original vs Revised Tech Stack
 
 | Category | Original (Manuscript) | Revised (Final) |
@@ -468,7 +506,17 @@ cp server/.env.example server/.env
 # Edit server/.env and set GROQ_API_KEY and JWT_SECRET
 ```
 
-### 2. Point the App to the Backend IP Address
+## 1b. xAI (Voice Mode realtime speech-to-speech)
+
+Voice Mode streams your mic straight to an xAI Grok voice session (`/api/agent/token` mints a short-lived client secret; the app connects to `wss://api.x.ai/v1/realtime?model=grok-voice-latest`).
+
+- Add `XAI_API_KEY` to `server/.env` (from https://console.x.ai/api-keys).
+- **The xAI team must have credits/license before any xAI call will succeed** (403 `{"code":"The caller does not have permission..."}` otherwise). Buy credits at https://console.x.ai/team/ebd335d6-6bf0-4ee1-8536-17534eaac939.
+- Optional overrides: `XAI_VOICE_MODEL` (default `grok-voice-latest`), `XAI_VOICE` (default `eve`).
+- Smoke check once credits are added: `POST /v1/tts` or `GET /api/agent/status` from the app.
+- If xAI is unavailable, the voice screen's text chips still fall back to Groq chat + TTS.
+
+## 2. Point the App to the Backend IP Address
 
 When running on physical devices or other local setups, you'll need to configure the app to connect to your backend server.
 

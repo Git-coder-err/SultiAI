@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function Input({
   label, icon, value, onChangeText, placeholder, secureTextEntry, error,
   keyboardType, autoCapitalize, multiline, containerStyle, inputStyle, rightIcon,
-  onRightIconPress,
+  onRightIconPress, id, name, autoComplete, testID,
 }) {
   const { colors } = useTheme();
 
@@ -21,6 +21,9 @@ export default function Input({
       ]}>
         {icon && <Ionicons name={icon} size={20} color={colors.textLight} style={styles.leftIcon} />}
         <TextInput
+          id={id}
+          name={name}
+          testID={testID}
           style={[
             styles.input,
             { color: colors.text },
@@ -35,6 +38,7 @@ export default function Input({
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize || 'none'}
+          autoComplete={autoComplete}
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
         />

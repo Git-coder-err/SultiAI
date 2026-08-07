@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
+import { XP_VALUES } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -32,6 +33,9 @@ const PHILIPPINE_LANGUAGES = [
   { id: 'kapampangan', label: 'Kapampangan', native: 'Kapampangan', region: 'Central Luzon', flag: '\u{1F1F5}\u{1F1ED}', color: '#EC4899', speakers: '2M+' },
   { id: 'pangasinan', label: 'Pangasinan', native: 'Pangasinan', region: 'Pangasinan', flag: '\u{1F1F5}\u{1F1ED}', color: '#06B6D4', speakers: '1M+' },
 ];
+
+const stripDetectedLine = (text) =>
+  (text || '').replace(/^\s*[🗣️]\s*Detected:[^\n]*\n?/i, '').trim();
 
 const TOPICS = [
   { label: 'Greetings', icon: 'hand-left', desc: 'Maayong adlaw! Hello!' },
@@ -65,6 +69,7 @@ function AnimatedMessage({ children, index }) {
 }
 
 function TypingDots() {
+  const { colors } = useTheme();
   const dot1 = useSharedValue(0);
   const dot2 = useSharedValue(0);
   const dot3 = useSharedValue(0);
@@ -90,9 +95,9 @@ function TypingDots() {
 
   return (
     <View style={{ flexDirection: 'row', gap: 5, paddingVertical: 8, paddingLeft: 4 }}>
-      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6', opacity: 0.6 }, style1]} />
-      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6', opacity: 0.6 }, style2]} />
-      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6', opacity: 0.6 }, style3]} />
+      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, opacity: 0.6 }, style1]} />
+      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, opacity: 0.6 }, style2]} />
+      <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, opacity: 0.6 }, style3]} />
     </View>
   );
 }
@@ -153,8 +158,8 @@ export default function WhisperAIScreen({ navigation }) {
     try {
       const data = await api.whisperChat(msg, selectedLanguage.id);
       const reply = data.reply || 'Pasayloa ko, wala ko kasabot. Please try again!';
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: reply }]);
-      addXp(5, 'whisper');
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: reply, detected: data.detected || null }]);
+      addXp(XP_VALUES.WHISPER_INTERACTION, 'whisper');
     } catch (err) {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: 'Sorry, I had trouble connecting. Please try again. \u{1F614}' }]);
     } finally {
@@ -211,8 +216,8 @@ export default function WhisperAIScreen({ navigation }) {
         setMessages((prev) => [...prev, { id: Date.now().toString(), role: 'user', text: data.transcription }]);
       }
       if (data.reply) {
-        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: data.reply }]);
-        addXp(5, 'whisper');
+        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: data.reply, detected: data.detected || null }]);
+        addXp(XP_VALUES.WHISPER_INTERACTION, 'whisper');
       }
     } catch (err) {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: 'Sorry, I couldn\'t process that audio. Please try again.' }]);
@@ -232,7 +237,7 @@ export default function WhisperAIScreen({ navigation }) {
   const currentLang = selectedLanguage;
 
   const renderHeader = () => (
-    <LinearGradient colors={['#8B5CF6', '#6D28D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
@@ -289,7 +294,7 @@ export default function WhisperAIScreen({ navigation }) {
         {TOPICS.map((topic) => (
           <TouchableOpacity
             key={topic.label}
-            style={[styles.topicChip, { backgroundColor: activeTopic?.label === topic.label ? '#8B5CF6' : colors.surface, borderColor: activeTopic?.label === topic.label ? '#8B5CF6' : colors.border }]}
+            style={[styles.topicChip, { backgroundColor: activeTopic?.label === topic.label ? colors.primary : colors.surface, borderColor: activeTopic?.label === topic.label ? colors.primary : colors.border }]}
             onPress={() => loadPhrases(topic)}
           >
             <Ionicons name={topic.icon} size={16} color={activeTopic?.label === topic.label ? '#fff' : colors.primary} />
@@ -338,21 +343,31 @@ export default function WhisperAIScreen({ navigation }) {
 
   const renderMessage = ({ item, index }) => {
     const isUser = item.role === 'user';
+    const detected = !isUser ? item.detected : null;
+    const bubbleText = detected ? stripDetectedLine(item.text) : item.text;
     return (
       <AnimatedMessage index={index}>
         <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAssistant]}>
           {!isUser && (
-            <LinearGradient colors={['#8B5CF6', '#6D28D9']} style={styles.msgAvatar}>
+            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.msgAvatar}>
               <Ionicons name="language" size={16} color="#fff" />
             </LinearGradient>
           )}
-          <View style={[styles.msgBubble, isUser ? styles.msgUser : styles.msgAssistant, { backgroundColor: isUser ? '#8B5CF6' : (isDark ? colors.surface : colors.white) }]}>
-            <Text style={[styles.msgText, { color: isUser ? '#fff' : colors.text }]}>{item.text}</Text>
-            {!isUser && (
-              <TouchableOpacity onPress={() => speakPhrase(item.text.replace(/\*\*/g, '').replace(/[^a-zA-Z\u00F1\u00D1\s]/g, '').trim(), selectedLanguage.id)} style={styles.msgSpeak}>
-                <Ionicons name="volume-high" size={14} color={colors.primary} />
-              </TouchableOpacity>
+          <View style={{ flex: 1, alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+            {detected && (
+              <View style={[styles.detectedPill, { backgroundColor: colors.primary + '18' }]}>
+                <Ionicons name="mic-outline" size={11} color={colors.primary} />
+                <Text style={[styles.detectedText, { color: colors.primary }]}>Detected: {detected}</Text>
+              </View>
             )}
+             <View style={[styles.msgBubble, isUser ? styles.msgUser : styles.msgAssistant, { backgroundColor: isUser ? colors.primary : colors.surface }]}>
+              <Text style={[styles.msgText, { color: isUser ? '#fff' : colors.text }]}>{bubbleText}</Text>
+              {!isUser && (
+                <TouchableOpacity onPress={() => speakPhrase(item.text.replace(/\*\*/g, '').replace(/[^a-zA-Z\u00F1\u00D1\s]/g, '').trim(), selectedLanguage.id)} style={styles.msgSpeak}>
+                  <Ionicons name="volume-high" size={14} color={colors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </AnimatedMessage>
@@ -373,6 +388,7 @@ export default function WhisperAIScreen({ navigation }) {
             renderItem={renderMessage}
             style={styles.chatList}
             contentContainerStyle={styles.chatContent}
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             ListHeaderComponent={
               <View>
@@ -388,10 +404,15 @@ export default function WhisperAIScreen({ navigation }) {
               onPressIn={startRecording}
               onPressOut={stopRecording}
               style={[styles.micBtn, recording ? styles.micBtnActive : { backgroundColor: colors.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel={recording ? 'Stop recording' : 'Record voice message'}
             >
               <Ionicons name={recording ? 'mic' : 'mic-outline'} size={22} color={recording ? '#EF4444' : colors.primary} />
             </TouchableOpacity>
             <TextInput
+              id="whisperInput"
+              name="whisperInput"
+              testID="whisper-input"
               style={[styles.textInput, { color: colors.text, backgroundColor: isDark ? colors.background : colors.surfaceSecondary }]}
               placeholder={`Type in ${selectedLanguage.label} or English...`}
               placeholderTextColor={colors.textLight}
@@ -400,8 +421,17 @@ export default function WhisperAIScreen({ navigation }) {
               onSubmitEditing={() => sendMessage()}
               multiline
               maxLength={500}
+              autoComplete="off"
+              autoCorrect={false}
+              id="whisper-input"
+              name="whisper-input"
+              nativeID="whisper-input"
+              accessibilityLabel="Message input"
+              accessibilityHint="Type your message here"
+              importantForAutofill="no"
+              autoComplete="off"
             />
-            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: '#8B5CF6', opacity: input.trim() ? 1 : 0.4 }]} onPress={() => sendMessage()} disabled={!input.trim() || loading}>
+             <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.primary, opacity: input.trim() ? 1 : 0.5 }]} onPress={() => sendMessage()} disabled={!input.trim() || loading} accessibilityRole="button" accessibilityLabel="Send message">
               <Ionicons name="send" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -412,7 +442,7 @@ export default function WhisperAIScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, minHeight: 0 },
   header: { paddingBottom: 16, paddingHorizontal: spacing.lg },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   backBtn: { padding: 4, marginRight: 8 },
@@ -423,9 +453,9 @@ const styles = StyleSheet.create({
   langPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: borderRadius.full, gap: 6 },
   langFlag: { fontSize: 14 },
   langLabel: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  container: { flex: 1 },
-  chatList: { flex: 1 },
-  chatContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  container: { flex: 1, minHeight: 0 },
+  chatList: { flex: 1, minHeight: 0 },
+  chatContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, flexGrow: 1 },
   langPickerContainer: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   langPicker: {},
   pickerTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
@@ -456,9 +486,11 @@ const styles = StyleSheet.create({
   msgRowUser: { justifyContent: 'flex-end' },
   msgRowAssistant: { justifyContent: 'flex-start' },
   msgAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  detectedPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full, marginBottom: 6 },
+  detectedText: { fontSize: 11, fontWeight: '600' },
   msgBubble: { maxWidth: '80%', padding: spacing.md, borderRadius: borderRadius.lg, position: 'relative' },
   msgUser: { borderBottomRightRadius: 4 },
-  msgAssistant: { borderBottomLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+  msgAssistant: { borderBottomLeftRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', elevation: 1 },
   msgText: { fontSize: 15, lineHeight: 21 },
   msgSpeak: { position: 'absolute', bottom: 6, right: 6, padding: 4 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: 1, gap: spacing.sm },

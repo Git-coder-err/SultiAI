@@ -8,7 +8,7 @@ import WordReveal from '../WordReveal';
 import { findVocabInText } from '../../utils/bisayaWords';
 import { PronunciationCard, RepeatCard, VocabCards } from './LearningCards';
 
-function HoyAvatar() {
+function SultiAvatar() {
   return (
     <View style={styles.avatarWrap}>
       <LinearGradient colors={orbCoreGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
@@ -41,7 +41,7 @@ export function UserMessage({ text, pronunciation, speaking }) {
   );
 }
 
-export function HoyMessage({ text, speaking, onSpeak }) {
+export function SultiMessage({ text, speaking, onSpeak }) {
   const speed = useMemo(() => {
     if (!text) return 45;
     const words = text.split(/\s+/).length;
@@ -50,12 +50,12 @@ export function HoyMessage({ text, speaking, onSpeak }) {
   const vocab = useMemo(() => findVocabInText(text), [text]);
 
   return (
-    <Animated.View entering={FadeInUp.duration(350)} style={styles.hoyBlock}>
-      <View style={styles.hoyRow}>
-        <HoyAvatar />
-        <View style={styles.hoyBubble}>
-          <View style={styles.hoyHeader}>
-            <Text style={styles.hoyLabel}>Hoy</Text>
+    <Animated.View entering={FadeInUp.duration(350)} style={styles.sultiBlock}>
+      <View style={styles.sultiRow}>
+        <SultiAvatar />
+        <View style={styles.sultiBubble}>
+          <View style={styles.sultiHeader}>
+            <Text style={styles.sultiLabel}>SULTI</Text>
             {speaking && (
               <View style={styles.typingDots}>
                 <View style={styles.dot} />
@@ -77,9 +77,9 @@ export function HoyMessage({ text, speaking, onSpeak }) {
 
 export function TypingIndicator() {
   return (
-    <Animated.View entering={FadeInUp.duration(250)} style={styles.hoyRow}>
-      <HoyAvatar />
-      <View style={styles.hoyBubble}>
+    <Animated.View entering={FadeInUp.duration(250)} style={styles.sultiRow}>
+      <SultiAvatar />
+      <View style={styles.sultiBubble}>
         <View style={styles.typingDots}>
           <View style={styles.dot} />
           <View style={styles.dot} />
@@ -104,17 +104,17 @@ const styles = StyleSheet.create({
   },
   userLabel: { color: voice.primary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 3 },
   userText: { color: voice.text, fontSize: 15, lineHeight: 21 },
-  hoyBlock: { alignItems: 'flex-start' },
-  hoyRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingRight: 40 },
-  hoyBubble: {
+  sultiBlock: { alignItems: 'flex-start' },
+  sultiRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingRight: 40 },
+  sultiBubble: {
     backgroundColor: 'rgba(13, 30, 48, 0.7)',
     borderWidth: 1, borderColor: voice.glassBorder,
     borderRadius: 20, borderTopLeftRadius: 6,
     paddingHorizontal: 14, paddingVertical: 11,
     flex: 1,
   },
-  hoyHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  hoyLabel: { color: voice.secondary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  sultiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  sultiLabel: { color: voice.secondary, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
   typingDots: { flexDirection: 'row', gap: 3, alignItems: 'center', paddingVertical: 2 },
   dot: {
     width: 5, height: 5, borderRadius: 2.5, backgroundColor: voice.primary,

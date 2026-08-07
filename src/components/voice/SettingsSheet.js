@@ -26,8 +26,17 @@ function Row({ icon, title, subtitle, value, onValueChange, accessibilityLabel }
   );
 }
 
-export default function SettingsSheet({ visible, onClose, haptics, continuous, slowMode, onHaptics, onContinuous, onSlow }) {
+export default function SettingsSheet({
+  visible, onClose, haptics, continuous, slowMode, onHaptics, onContinuous, onSlow,
+  selectedCharacter, onCharacterChange,
+}) {
   const insets = useSafeAreaInsets();
+  const CHARACTERS = [
+    { id: 'blessica', name: 'Blessica', desc: 'Warm, friendly female' },
+    { id: 'angel', name: 'Angel', desc: 'Clear, patient male' },
+    { id: 'sultan', name: 'Sultan', desc: 'Authoritative male' },
+    { id: 'lola', name: 'Lola', desc: 'Gentle, wise elder female' },
+  ];
 
   if (!visible) return null;
 
@@ -53,7 +62,7 @@ export default function SettingsSheet({ visible, onClose, haptics, continuous, s
         <Row
           icon="infinite-outline"
           title="Continuous conversation"
-          subtitle="Automatically listen again after Hoy speaks"
+          subtitle="Automatically listen again after SULTI speaks"
           value={continuous}
           onValueChange={onContinuous}
         />
@@ -64,6 +73,27 @@ export default function SettingsSheet({ visible, onClose, haptics, continuous, s
           value={slowMode}
           onValueChange={onSlow}
         />
+
+        <Text style={[styles.sectionLabel, { color: voice.textSecondary }]}>Voice Character</Text>
+        {CHARACTERS.map((char) => (
+          <TouchableOpacity
+            key={char.id}
+            style={[
+              styles.charRow,
+              selectedCharacter === char.id && { backgroundColor: 'rgba(32,214,199,0.15)' },
+            ]}
+            onPress={() => onCharacterChange && onCharacterChange(char.id)}
+            accessibilityLabel={`Select ${char.name}`}
+          >
+            <View style={styles.charRadio}>
+              {selectedCharacter === char.id && <View style={styles.charRadioInner} />}
+            </View>
+            <View style={styles.charInfo}>
+              <Text style={[styles.charName, { color: voice.text }]}>{char.name}</Text>
+              <Text style={[styles.charDesc, { color: voice.textMuted }]}>{char.desc}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
 
         <Text style={styles.footnote}>Made for learners — every reply is also read aloud word by word.</Text>
       </Animated.View>
@@ -90,5 +120,20 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, paddingRight: 8 },
   rowTitle: { color: voice.text, fontSize: 15, fontWeight: '600' },
   rowSubtitle: { color: voice.textMuted, fontSize: 12, marginTop: 2 },
+  sectionLabel: { color: voice.textSecondary, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 },
+  charRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10,
+    borderRadius: 12, marginBottom: 4,
+  },
+  charRadio: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  charRadioInner: {
+    width: 10, height: 10, borderRadius: 5, backgroundColor: voice.primary,
+  },
+  charInfo: { flex: 1 },
+  charName: { fontSize: 14, fontWeight: '600' },
+  charDesc: { fontSize: 12, marginTop: 2 },
   footnote: { color: voice.textMuted, fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
