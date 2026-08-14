@@ -1,0 +1,251 @@
+"use client";
+
+import { useState } from "react";
+import type { LessonModule, ModuleDifficulty } from "@/types";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
+import { useAsync } from "@/hooks/useAsync";
+import { api } from "@/lib/api";
+import { Card, EmptyState, ErrorState, LoadingState, StatusBadge, ghostBtn, inputCls, primaryBtn, selectCls } from "@/components/ui";
+
+const difficultyTone: Record<ModuleDifficulty, string> = {
+  beginner: "text-success bg-success/10",
+  intermediate: "text-brand-dark bg-brand-light",
+  advanced: "text-[#b45309] bg-accent-light",
+};
+
+export default function AdminLessonsPage() {
+  const toast = useToast();
+  const { data, loading, error, reload } = useAsync(() => api.listLessons(), []);
+  const [editing, setEditing] = useState<LessonModule | "new" | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LessonModule | null>(null);
+
+  async function handleTogglePublish(lesson: LessonModule) {
+    const updated = await api.updateLesson(lesson.id, { published: !lesson.published });
+    toast.push("success", `"${updated.title}" ${updated.published ? "published" : "unpublished"}.`);
+    reload();
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    await api.deleteLesson(deleteTarget.id);
+    toast.push("success", `"${deleteTarget.title}" deleted.`);
+    setDeleteTarget(null);
+    reload();
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Lessons</h1>
+          <p className="mt-1 text-sm text-ink-soft">{data?.length ?? 0} learning modules</p>
+        </div>
+        <button type="button" className={primaryBtn} onClick={() => setEditing("new")}>
+          + New lesson module
+        </button>
+      </div>
+
+      {loading ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : !data || data.length === 0 ? (
+        <Card>
+          <EmptyState title="No lesson modules yet" description="Create your first module to get started." />
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface text-xs uppercase tracking-wide text-ink-faint">
+                  <th className="px-5 py-3.5 font-semibold">Module</th>
+                  <th className="px-5 py-3.5 font-semibold">Difficulty</th>
+                  <th className="px-5 py-3.5 font-semibold">Lessons</th>
+                  <th className="px-5 py-3.5 font-semibold">Completions</th>
+                  <th className="px-5 py-3.5 font-semibold">Avg completion</th>
+                  <th className="px-5 py-3.5 font-semibold">Status</th>
+                  <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((lesson) => (
+                  <tr key={lesson.id} className="border-b border-line transition-colors last:border-0 hover:bg-surface/60">
+                    <td className="px-5 py-3.5">
+                      <p className="font-semibold text-ink">{lesson.title}</p>
+                      <p className="text-xs text-ink-faint">{lesson.language}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${difficultyTone[lesson.difficulty]}`}>
+                        {lesson.difficulty}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{lesson.lessons}</td>
+                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{lesson.completions.toLocaleString()}</td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line">
+                          <div className="h-full rounded-full bg-success" style={{ width: `${lesson.avgCompletionPercent}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums text-ink-soft">{lesson.avgCompletionPercent}%</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={lesson.published ? "published" : "draft"} />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublish(lesson)}
+                          className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-brand"
+                        >
+                          {lesson.published ? "Unpublish" : "Publish"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditing(lesson)}
+                          className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-brand"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(lesson)}
+                          className="rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {editing && (
+        <LessonModal
+          lesson={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            toast.push("success", editing === "new" ? "Lesson module created." : "Lesson module updated.");
+            setEditing(null);
+            reload();
+          }}
+        />
+      )}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.title}"?`}
+        message="This permanently removes the module and its completion data. This cannot be undone."
+        confirmLabel="Delete module"
+        onConfirm={handleDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </div>
+  );
+}
+
+function LessonModal({
+  lesson,
+  onClose,
+  onSaved,
+}: {
+  lesson: LessonModule | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    title: lesson?.title ?? "",
+    difficulty: (lesson?.difficulty ?? "beginner") as ModuleDifficulty,
+    lessons: lesson?.lessons ?? 8,
+    published: lesson?.published ?? true,
+  });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      if (lesson) {
+        await api.updateLesson(lesson.id, form);
+      } else {
+        await api.createLesson({ ...form, language: "Bisaya (Cebuano)" });
+      }
+      onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-2xl border border-line bg-white p-7 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold text-ink">{lesson ? "Edit module" : "New lesson module"}</h3>
+        <div className="mt-5 space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Title</label>
+            <input
+              required
+              className={inputCls}
+              placeholder="e.g. Greetings & Introductions"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Difficulty</label>
+              <select
+                className={selectCls}
+                value={form.difficulty}
+                onChange={(e) => setForm({ ...form, difficulty: e.target.value as ModuleDifficulty })}
+              >
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Number of lessons</label>
+              <input
+                required
+                type="number"
+                min={1}
+                className={inputCls}
+                value={form.lessons}
+                onChange={(e) => setForm({ ...form, lessons: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2.5 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={form.published}
+              onChange={(e) => setForm({ ...form, published: e.target.checked })}
+              className="h-4 w-4 accent-[#1e6f9f]"
+            />
+            Publish immediately
+          </label>
+        </div>
+        <div className="mt-7 flex justify-end gap-3">
+          <button type="button" className={ghostBtn} onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className={primaryBtn} disabled={busy}>
+            {busy ? "Saving..." : lesson ? "Save changes" : "Create module"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

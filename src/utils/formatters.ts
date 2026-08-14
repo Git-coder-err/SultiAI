@@ -31,8 +31,8 @@ export function SafeUserStats(stats?: UserStats): SafeStats {
   const safeStreak = Math.max(0, Number(stats?.streakDays) || 0);
   const hasDailyXp = stats?.dailyXp !== undefined && stats?.dailyXp !== null;
   const safeDailyXp = Math.max(0, Number(hasDailyXp ? stats.dailyXp : stats?.xp) || 0);
-  const safeWeekly = clamp(Number(stats?.weeklyProgress) || 65, 0, 100);
-  const safePronunciation = clamp(Number(stats?.pronunciationScore) || 88, 0, 100);
+  const safeWeekly = clamp(Number(stats?.weeklyProgress) || 0, 0, 100);
+  const safePronunciation = clamp(Number(stats?.pronunciationScore) || 0, 0, 100);
   const levelInfo = getLevel(safeXp);
   const dailyProgress = safeTarget > 0 ? Math.min(Math.round((safeDailyXp / safeTarget) * 100), 100) : 0;
 

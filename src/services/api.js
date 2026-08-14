@@ -145,6 +145,7 @@ export const api = {
   getLearningAnalytics: () => request('GET', '/api/analytics/learning'),
   getWeeklyProgress: () => request('GET', '/api/analytics/weekly'),
   getStreakData: () => request('GET', '/api/analytics/streak'),
+  getPronunciationStats: () => request('GET', '/api/v2/pronunciation/stats'),
 
   // Whisper AI (Philippine Dialects)
   whisperChat: (message, language) =>

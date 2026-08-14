@@ -8,7 +8,9 @@ import { spacing } from '../theme';
 
 export default function XpBar({ current, max, label, showLabel = true, color, height = 8 }) {
   const { colors } = useTheme();
-  const progress = max > 0 ? Math.min(current / max, 1) : 0;
+  const safeCurrent = Math.max(0, Number(current) || 0);
+  const safeMax = Math.max(1, Number(max) || 0);
+  const progress = safeMax > 0 ? Math.min(safeCurrent / safeMax, 1) : 0;
   const animatedWidth = useSharedValue(0);
   const c = color || colors.accent;
 
@@ -28,7 +30,7 @@ export default function XpBar({ current, max, label, showLabel = true, color, he
       {showLabel && label && (
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
-          <Text style={[styles.value, { color: colors.text }]}>{current} / {max}</Text>
+          <Text style={[styles.value, { color: colors.text }]}>{safeCurrent.toLocaleString()} / {safeMax.toLocaleString()}</Text>
         </View>
       )}
       <View style={[styles.track, { height, backgroundColor: colors.border, borderRadius: height / 2 }]}>

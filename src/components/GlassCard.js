@@ -13,7 +13,7 @@ export default function GlassCard({
 
   const baseStyle = [
     styles.base,
-    { padding: padMap[padding] || spacing.xl },
+    { padding: padMap[padding] || spacing.xl, borderColor: colors.border, ...shadows.card },
     style,
   ];
 
@@ -22,10 +22,10 @@ export default function GlassCard({
       <View style={[
         styles.webGlass,
         { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-        variant === 'elevated' && styles.elevated,
-        variant === 'tinted' && { backgroundColor: colors.primary + '10', borderColor: colors.primary + '20' },
-        floating && styles.floatShadow,
         baseStyle,
+        variant === 'elevated' && styles.elevated,
+        variant === 'tinted' && { backgroundColor: colors.primary + '10', borderColor: colors.borderHover },
+        floating && styles.floatShadow,
       ]}>
         <View style={[styles.shine, { backgroundColor: colors.glassHighlight }]} />
         {children}
@@ -40,10 +40,10 @@ export default function GlassCard({
       style={[
         styles.base,
         styles.inner,
+        baseStyle,
         variant === 'elevated' && styles.elevated,
         variant === 'tinted' && { backgroundColor: colors.primary + '10' },
         floating && styles.floatShadow,
-        baseStyle,
       ]}>
       {children}
     </BlurView>

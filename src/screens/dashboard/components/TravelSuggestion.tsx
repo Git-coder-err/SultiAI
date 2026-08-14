@@ -9,7 +9,14 @@ interface TravelSuggestionProps {
   onPractice?: () => void;
 }
 
-const SUGGESTIONS = [
+const SUGGESTIONS: {
+  place: string;
+  emoji: string;
+  phrase: string;
+  english: string;
+  icon: string;
+  gradient: [string, string];
+}[] = [
   { place: 'Cebu City Market', emoji: '\ud83c\udfea', phrase: 'Pila ni?', english: 'How much is this?', icon: 'basket', gradient: ['#0EA5E5', '#6366F1'] },
   { place: 'Jeepney Ride', emoji: '\ud83d\ude8c', phrase: 'Maka-abot ba sa Colon?', english: 'Can this reach Colon?', icon: 'bus', gradient: ['#14B8A6', '#06B6D4'] },
   { place: 'Beach Resort', emoji: '\ud83c\udfd6', phrase: 'Palihog ug tubig', english: 'Please bring water', icon: 'water', gradient: ['#F59E0B', '#F97316'] },

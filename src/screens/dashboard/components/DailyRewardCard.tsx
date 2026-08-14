@@ -12,7 +12,7 @@ const DAILY_REWARD_KEY = 'sultiai_daily_reward_date';
 
 export function DailyRewardCard() {
   const { colors, getAnimationDuration } = useTheme();
-  const { addXp, addCoins } = useGame();
+  const { addXp, addCoins } = useGame() as any;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [claimed, setClaimed] = useState(false);
   const [claiming, setClaiming] = useState(false);

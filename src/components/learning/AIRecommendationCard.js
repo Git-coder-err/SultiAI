@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,24 +8,165 @@ import {
   Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { useGame } from '../../context/GameContext';
 import GlassCard from '../GlassCard';
-import { spacing, borderRadius, typography, shadows } from '../../theme';
+import { spacing, borderRadius, shadows } from '../../theme';
 import { api } from '../../services/api';
 
-export default function AIRecommendationCard({ onStart, navigation }) {
-  const { colors, isDark } = useTheme();
-  const { xp, dailyXp } = useGame();
+// Map recommendation modules to existing SultiAI routes (SULTI tutor flow, NOT "Tutor").
+const MODULE_ROUTES = {
+  phrasebook: 'Phrasebook',
+  daily_challenge: 'SULTI',
+  pronunciation: 'Pronunciation',
+  ai_conversation: 'SULTI',
+  flashcards: 'Flashcards',
+  vocabulary: 'VocabularyReview',
+  voice: 'VoiceMode',
+  scenario: 'ScenarioPractice',
+};
+
+function buildRecommendation({ analytics, game, pronunciationStats, inProgressModule }) {
+  const started = Number(analytics?.modules_started) || 0;
+  const avgCompletion = Number(analytics?.avg_completion) || 0;
+  const pronAttempts = Number(pronunciationStats?.totalAttempts) || 0;
+  const pronAvg = Number(pronunciationStats?.avgAccuracy) || 0;
+  const dailyXp = Number(game?.dailyXp) || 0;
+  const dailyGoal = Math.max(1, Number(game?.dailyGoal) || 50);
+  const xp = Number(game?.xp) || 0;
+
+  if (inProgressModule) {
+    return {
+      type: 'continue',
+      title: `Continue ${inProgressModule.title}`,
+      description: 'Pick up right where you left off.',
+      module: 'continue',
+      route: inProgressModule.route,
+      icon: 'play-forward',
+      color: '#14B8A6',
+      reason: 'You already started this — keep the momentum going.',
+    };
+  }
+  if (pronAttempts === 0) {
+    return {
+      type: 'pronunciation',
+      title: 'Start Pronunciation Practice',
+      description: 'Build confidence speaking Bisaya with checked pronunciation.',
+      module: 'pronunciation',
+      icon: 'mic',
+      color: '#EC4899',
+      reason: 'Pronunciation practice will unlock your first speaking scores.',
+    };
+  }
+  if (pronAvg > 0 && pronAvg < 70) {
+    return {
+      type: 'pronunciation',
+      title: 'Improve Your Pronunciation',
+      description: `Your average pronunciation score is ${Math.round(pronAvg)}%.`,
+      module: 'pronunciation',
+      icon: 'mic',
+      color: '#EC4899',
+      reason: 'A little practice per sound goes a long way.',
+    };
+  }
+  if (dailyXp < dailyGoal) {
+    return {
+      type: 'daily',
+      title: 'Reach Today\'s Goal',
+      description: `${dailyXp.toLocaleString()} / ${dailyGoal} XP today — keep your streak alive.`,
+      module: 'daily_challenge',
+      icon: 'target',
+      color: '#F59E0B',
+      reason: `${Math.max(0, dailyGoal - dailyXp).toLocaleString()} XP to your daily goal.`,
+    };
+  }
+  if (started > 0 && avgCompletion > 0 && avgCompletion < 100) {
+    return {
+      type: 'continue',
+      title: 'Keep Your Progress Going',
+      description: `You are ${Math.round(avgCompletion)}% through your started modules.`,
+      module: 'ai_conversation',
+      icon: 'sparkles',
+      color: '#8B5CF6',
+      reason: 'Regular practice is the fastest path to fluency.',
+    };
+  }
+  if (xp < 500) {
+    return {
+      type: 'practice',
+      title: 'Practice with SULTI',
+      description: 'Chat in Bisaya with your AI tutor to build real confidence.',
+      module: 'ai_conversation',
+      icon: 'chatbubbles',
+      color: '#3B82F6',
+      reason: 'Conversation turns vocabulary into fluent speech.',
+    };
+  }
+  return {
+    type: 'advanced',
+    title: 'AI Conversation Practice',
+    description: 'Roleplay real scenarios with Sulti at your level.',
+    module: 'ai_conversation',
+    icon: 'chatbubbles',
+    color: '#8B5CF6',
+    reason: 'You are ready for deeper conversation practice.',
+  };
+}
+
+/**
+ * AIRecommendationCard
+ * Generates a deterministic learning recommendation from real data only:
+ *   - /api/analytics/learning (DB aggregates, not an LLM call)
+ *   - existing pronunciation stats (optional prop)
+ *   - GameContext (xp, dailyXp, dailyGoal)
+ * It never expects a "recommendation" field that the backend does not return,
+ * and it never fires an LLM/AI request.
+ */
+export default function AIRecommendationCard({
+  onStart,
+  navigation,
+  refreshKey = 0,
+  pronunciationStats,
+  inProgressModule,
+}) {
+  const { colors } = useTheme();
+  const game = useGame();
   const [recommendation, setRecommendation] = useState(null);
   const [loading, setLoading] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  const gameXp = Number(game?.xp) || 0;
+  const gameDailyXp = Number(game?.dailyXp) || 0;
+  const gameDailyGoal = Math.max(1, Number(game?.dailyGoal) || 50);
+  const pronAttempts = Number(pronunciationStats?.totalAttempts) || 0;
+  const pronAvg = Math.max(0, Number(pronunciationStats?.avgAccuracy) || 0);
+  const continueTitle = inProgressModule ? String(inProgressModule.title) : null;
+  const continueRoute = inProgressModule ? String(inProgressModule.route) : null;
+
+  const loadRecommendation = useCallback(async () => {
+    let analytics = null;
+    try {
+      analytics = await api.getLearningAnalytics();
+    } catch {
+      analytics = null;
+    }
+    setRecommendation(buildRecommendation({
+      analytics,
+      game: { xp: gameXp, dailyXp: gameDailyXp, dailyGoal: gameDailyGoal },
+      pronunciationStats: { totalAttempts: pronAttempts, avgAccuracy: pronAvg },
+      inProgressModule: continueRoute ? { title: continueTitle, route: continueRoute } : null,
+    }));
+    setLoading(false);
+  }, [gameXp, gameDailyXp, gameDailyGoal, pronAttempts, pronAvg, continueTitle, continueRoute]);
+
   useEffect(() => {
     loadRecommendation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
+
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -40,7 +181,6 @@ export default function AIRecommendationCard({ onStart, navigation }) {
       }),
     ]).start();
 
-    // Pulse animation for the AI sparkle
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.1, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
@@ -48,91 +188,20 @@ export default function AIRecommendationCard({ onStart, navigation }) {
       ]),
       { iterations: -1 }
     ).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadRecommendation = async () => {
-    try {
-      const data = await api.getLearningAnalytics();
-      setRecommendation(data.recommendation);
-    } catch (e) {
-      // Generate smart recommendation based on user state
-      const rec = generateSmartRecommendation();
-      setRecommendation(rec);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateSmartRecommendation = () => {
-    // Smart logic based on user progress
-    if (xp < 100) {
-      return {
-        type: 'beginner',
-        title: 'Start with Greetings',
-        description: 'Learn essential Bisaya greetings to build confidence',
-        module: 'phrasebook',
-        icon: 'hand-left',
-        color: '#14B8A6',
-        xpReward: 30,
-        reason: 'Perfect for beginners - master the basics first!',
-      };
-    }
-    if (dailyXp < 50) {
-      return {
-        type: 'daily',
-        title: 'Complete Daily Goal',
-        description: `Only ${50 - dailyXp} XP away from your daily goal`,
-        module: 'daily_challenge',
-        icon: 'target',
-        color: '#F59E0B',
-        xpReward: 50,
-        reason: 'Keep your streak alive!',
-      };
-    }
-    if (xp < 500) {
-      return {
-        type: 'practice',
-        title: 'Practice Pronunciation',
-        description: 'Improve your speaking with AI feedback',
-        module: 'pronunciation',
-        icon: 'mic',
-        color: '#A855F7',
-        xpReward: 40,
-        reason: 'Pronunciation is key to being understood',
-      };
-    }
-    return {
-      type: 'advanced',
-      title: 'AI Conversation Practice',
-      description: 'Roleplay real scenarios with Sulti',
-      module: 'ai_conversation',
-      icon: 'chatbubbles',
-      color: '#8B5CF6',
-      xpReward: 50,
-      reason: 'Take your Bisaya to the next level!',
-    };
-  };
-
   const handlePress = () => {
-    if (onStart) onStart(recommendation);
-    else if (navigation && recommendation) {
-      const moduleRoutes = {
-        phrasebook: 'Learn',
-        daily_challenge: 'Tutor',
-        pronunciation: 'Pronunciation',
-        ai_conversation: 'Tutor',
-        flashcards: 'Flashcards',
-        vocabulary: 'VocabularyReview',
-        voice: 'VoiceMode',
-      };
-      const route = moduleRoutes[recommendation.module] || 'Tutor';
-      const params = recommendation.module === 'daily_challenge' ? {
-        situation: 'Daily challenge practice',
-        label: 'Daily Challenge',
-      } : recommendation.module === 'ai_conversation' ? {
-        situation: 'Roleplay conversation',
-        label: 'AI Conversation',
-      } : {};
+    if (!recommendation) return;
+    if (onStart) {
+      onStart(recommendation);
+      return;
+    }
+    if (navigation) {
+      const route = recommendation.route || MODULE_ROUTES[recommendation.module] || 'SULTI';
+      const params = route === 'SULTI'
+        ? { situation: recommendation.title, label: recommendation.title }
+        : {};
       navigation.navigate(route, params);
     }
   };
@@ -183,15 +252,9 @@ export default function AIRecommendationCard({ onStart, navigation }) {
               >
                 <Ionicons name="sparkles" size={20} color={recommendation.color} />
               </Animated.View>
-              <Text style={[styles.recType, { color: recommendation.color }]}>AI Recommended</Text>
-              <Text style={styles.recTitle}>{recommendation.title}</Text>
+              <Text style={[styles.recType, { color: recommendation.color }]}>Your Focus</Text>
+              <Text style={[styles.recTitle, { color: colors.text }]}>{recommendation.title}</Text>
               <Text style={[styles.recDescription, { color: colors.textSecondary }]}>{recommendation.description}</Text>
-            </View>
-            <View style={styles.recRight}>
-              <View style={[styles.xpReward, { backgroundColor: recommendation.color + '20', borderColor: recommendation.color + '40' }]}>
-                <Ionicons name="star" size={16} color={recommendation.color} />
-                <Text style={[styles.xpText, { color: recommendation.color }]}>{'+' + recommendation.xpReward} XP</Text>
-              </View>
             </View>
           </View>
 
@@ -256,13 +319,6 @@ const styles = StyleSheet.create({
   },
   recLeft: {
     flex: 1,
-    marginRight: spacing.md,
-  },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
   },
   sparkleIcon: {
     width: 24,
@@ -284,23 +340,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     letterSpacing: -0.08,
-  },
-  recRight: {
-    alignItems: 'flex-end',
-  },
-  xpReward: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-  },
-  xpText: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.26,
   },
   recReason: {
     flexDirection: 'row',

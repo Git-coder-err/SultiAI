@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { useUser } from '../../../context/UserContext';
+import { useGame } from '../../../context/GameContext';
 import { spacing, borderRadius } from '../../../theme';
 
 interface SmartWelcomeHeaderProps {
@@ -11,24 +12,35 @@ interface SmartWelcomeHeaderProps {
   onProfilePress?: () => void;
 }
 
-const GREETINGS = [
-  "You're only one lesson away from extending your learning streak.",
-  "Your Bisaya pronunciation improved 12% this week. Keep going!",
-  "Ready to master market conversations today?",
-  "You're on a roll! 3 days strong. Let's make it 4.",
-  "New cultural discovery waiting for you today!",
+const TRUTHFUL_LINES = [
+  'Ready to practice Bisaya today?',
+  'A few minutes a day keeps your skills sharp.',
+  'Every sentence you speak builds confidence.',
+  'New lessons are waiting whenever you are.',
+  'Your next streak day starts with a single word.',
 ];
 
 export function SmartWelcomeHeader({ onNotificationPress, onSettingsPress, onProfilePress }: SmartWelcomeHeaderProps) {
   const { colors, getAnimationDuration } = useTheme();
   const { user } = useUser();
+  const { streak, dailyXp, dailyGoal } = useGame();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-10)).current;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
-  const name = user?.fullname?.split(' ')[0] || 'Learner';
-  const motivationalLine = GREETINGS[new Date().getDay() % GREETINGS.length];
+  const name = (user as any)?.fullname?.split(' ')[0] || 'Learner';
+
+  const safeStreak = Math.max(0, Number(streak) || 0);
+  const safeDailyXp = Math.max(0, Number(dailyXp) || 0);
+  const safeGoal = Math.max(1, Number(dailyGoal) || 50);
+
+  const motivationalLine =
+    safeStreak > 0
+      ? `You're on a ${safeStreak}-day streak. Make it ${safeStreak + 1}!`
+      : safeDailyXp >= safeGoal
+        ? 'Daily goal reached. Amazing work today!'
+        : TRUTHFUL_LINES[new Date().getDay() % TRUTHFUL_LINES.length];
 
   useEffect(() => {
     Animated.parallel([
@@ -50,11 +62,21 @@ export function SmartWelcomeHeader({ onNotificationPress, onSettingsPress, onPro
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity onPress={onNotificationPress} style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={onNotificationPress}
+            style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+          >
             <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
             <View style={[styles.badge, { backgroundColor: colors.error }]} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onSettingsPress} style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={onSettingsPress}
+            style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
             <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -62,7 +84,7 @@ export function SmartWelcomeHeader({ onNotificationPress, onSettingsPress, onPro
 
       <Animated.View style={[styles.motivationCard, { backgroundColor: colors.softTeal, opacity: fadeAnim }]}>
         <Ionicons name="sparkles" size={16} color={colors.accent} style={styles.motivationIcon} />
-        <Text style={[styles.motivationText, { color: colors.textSecondary }]}>{motivationalLine}</Text>
+        <Text style={[styles.motivationText, { color: colors.text }]}>{motivationalLine}</Text>
       </Animated.View>
     </Animated.View>
   );

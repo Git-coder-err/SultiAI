@@ -56,6 +56,8 @@ export function findVocabInText(text) {
   return found.slice(0, 3);
 }
 
+export const BISAYA_DICTIONARY = DICTIONARY;
+
 export const POPULAR_STARTERS = [
   'Teach Greetings',
   'Practice Pronunciation',

@@ -18,6 +18,7 @@ import VocabularyReviewScreen from '../screens/VocabularyReviewScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import CommunityScreen from '../screens/CommunityScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ARSceneScreen from '../screens/ARSceneScreen';
@@ -60,6 +61,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Flashcards" component={FlashcardsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="VocabularyReview" component={VocabularyReviewScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Achievements" component={AchievementsScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="ARScene" component={ARSceneScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="VoiceMode" component={VoiceModeScreen} options={{ presentation: 'modal', animation: 'fade' }} />

@@ -423,13 +423,10 @@ export default function WhisperAIScreen({ navigation }) {
               maxLength={500}
               autoComplete="off"
               autoCorrect={false}
-              id="whisper-input"
-              name="whisper-input"
               nativeID="whisper-input"
               accessibilityLabel="Message input"
               accessibilityHint="Type your message here"
               importantForAutofill="no"
-              autoComplete="off"
             />
              <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.primary, opacity: input.trim() ? 1 : 0.5 }]} onPress={() => sendMessage()} disabled={!input.trim() || loading} accessibilityRole="button" accessibilityLabel="Send message">
               <Ionicons name="send" size={18} color="#fff" />

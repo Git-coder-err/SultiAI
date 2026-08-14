@@ -42,3 +42,5 @@ export const ADAPTIVE_PARAMS = {
   MASTERY_THRESHOLD_DOWN: 0.40,
   MIN_SESSIONS_FOR_ASSESSMENT: 3,
 } as const;
+
+export const DAILY_GOAL_DEFAULT = 50;

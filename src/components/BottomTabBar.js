@@ -65,22 +65,24 @@ export default function BottomTabBar({ state, descriptors, navigation, routes = 
         style={styles.tab}
       >
         {focused ? (
-          <View style={[styles.activeIconWrap, { backgroundColor: colors.primary + '20' }]}>
+          <View style={[styles.activeIconWrap, { backgroundColor: colors.primary + '1A' }]}>
             <Ionicons name={iconName} size={24} color={colors.primary} />
           </View>
         ) : (
           <View style={styles.iconWrap}>
-            <Ionicons name={iconName} size={22} color={colors.textLight} />
+            <Ionicons name={iconName} size={22} color={colors.textSecondary} />
           </View>
         )}
         <Text
           style={[
             styles.label,
-            { color: focused ? colors.primary : colors.textLight },
+            { color: focused ? colors.primary : colors.textSecondary },
+            focused && styles.activeLabel,
           ]}
         >
           {label}
         </Text>
+        <View style={[styles.activeDot, focused ? { backgroundColor: colors.primary, opacity: 1 } : null]} />
       </TouchableOpacity>
     );
   };
@@ -146,6 +148,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xs,
     gap: 2,
+    minHeight: 52,
   },
   iconWrap: {
     width: 40,
@@ -153,6 +156,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  activeLabel: {
+    fontWeight: '800',
   },
   activeIconWrap: {
     width: 44,
@@ -173,5 +179,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.07,
     ...typography.small,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    opacity: 0,
   },
 });

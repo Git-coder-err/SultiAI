@@ -109,8 +109,6 @@ export function useAccessibility() {
   };
 
   return {
-    reduceMotion,
-    screenReaderEnabled,
     isDarkMode,
     ...prefs,
     loaded,

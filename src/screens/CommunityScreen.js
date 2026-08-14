@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
-  Alert, Share,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Animated, ScrollView, TextInput, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Speech from 'expo-speech';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
+import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
-import Header from '../components/Header';
+import { communityMock, FEED_FILTERS, MOCK_CULTURE, MOCK_EVENTS, MOCK_EXPERTS, MOCK_PHRASES } from '../services/communityMock';
+import { getLevel } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '../components/Card';
 import Avatar from '../components/Avatar';
 import Badge from '../components/Badge';
@@ -15,144 +19,209 @@ import BottomSheet from '../components/BottomSheet';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import { spacing, borderRadius, shadows } from '../theme';
+import PostCard from './community/PostCard';
+import CreatePostSheet from './community/CreatePostSheet';
+import { spacing, borderRadius } from '../theme';
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-const TABS = [
-  { key: 'feed', label: 'Feed', icon: 'newspaper-outline' },
-  { key: 'challenges', label: 'Challenges', icon: 'trophy-outline' },
-  { key: 'ask', label: 'Ask Native', icon: 'help-circle-outline' },
-  { key: 'phrases', label: 'Phrases', icon: 'chatbubble-ellipses-outline' },
-  { key: 'culture', label: 'Culture', icon: 'compass-outline' },
-  { key: 'events', label: 'Events', icon: 'calendar-outline' },
-  { key: 'discussions', label: 'Discussions', icon: 'git-merge-outline' },
-  { key: 'leaderboard', label: 'Leaderboard', icon: 'podium-outline' },
+const PRIMARY_TABS = [
+  { key: 'feed', label: 'Feed', icon: 'home', iconOutline: 'home-outline' },
+  { key: 'discover', label: 'Discover', icon: 'compass', iconOutline: 'compass-outline' },
+  { key: 'challenges', label: 'Challenges', icon: 'trophy', iconOutline: 'trophy-outline' },
+  { key: 'leaderboard', label: 'Leaderboard', icon: 'podium', iconOutline: 'podium-outline' },
+  { key: 'me', label: 'Me', icon: 'person', iconOutline: 'person-outline' },
 ];
 
-const MOCK_CHALLENGES = [
-  { id: 'c1', title: '10 Phrases in a Day', desc: 'Learn and post 10 new Bisaya phrases you practiced today.', xp: 100, icon: 'rocket', color: '#3B82F6' },
-  { id: 'c2', title: 'Speak a Full Sentence', desc: 'Record yourself saying a complete Bisaya sentence out loud.', xp: 150, icon: 'mic', color: '#10B981' },
-  { id: 'c3', title: 'Shadow a Native Speaker', desc: 'Pick any video, shadow the speaker, and share your take.', xp: 200, icon: 'headset', color: '#8B5CF6' },
-  { id: 'c4', title: '3-Day Streak', desc: 'Maintain a 3-day learning streak this week.', xp: 300, icon: 'flame', color: '#F59E0B' },
+const TYPE_FILTERS = [
+  { key: 'all', label: 'All', icon: 'apps' },
+  { key: 'question', label: 'Questions', icon: 'help-circle' },
+  { key: 'tip', label: 'Tips', icon: 'bulb' },
+  { key: 'vocabulary', label: 'Vocabulary', icon: 'book' },
+  { key: 'culture', label: 'Culture', icon: 'color-palette' },
 ];
 
-const MOCK_QUESTIONS = [
-  { id: 'q1', user: 'Leo M.', text: 'Unsa ang difference sa "kumusta" ug "kamusta"?', english: 'What is the difference between kumusta and kamusta?', helpful: 18, voice: true },
-  { id: 'q2', user: 'Ana R.', text: 'Paano sabihin "I used to live here" sa Bisaya?', english: 'How do you say "I used to live here" in Bisaya?', helpful: 12, voice: false },
-  { id: 'q3', user: 'Jose T.', text: 'Naa ko problema sa pag-pronounce sa "palihog".', english: 'I have trouble pronouncing "palihog".', helpful: 9, voice: true },
-];
-
-const MOCK_PHRASES = [
-  { id: 'p1', native: 'Balik ra ta', english: "We'll be back / See you later", user: 'CebuGirl99', color: '#14B8A6' },
-  { id: 'p2', native: 'Puhon', english: 'God willing / someday', user: 'BisayaBuddy', color: '#8B5CF6' },
-  { id: 'p3', native: 'Way sapayan', english: 'No worries / it\'s fine', user: 'JunB', color: '#F59E0B' },
-  { id: 'p4', native: 'Kabalo na ko', english: 'I already know', user: 'MariM', color: '#3B82F6' },
-];
-
-const MOCK_CULTURE = [
-  { id: 'cu1', title: 'Sinulog Festival', text: 'Cebu\'s grandest festival every January honors the Santo Niño with street dancing and music.', icon: 'color-palette', color: '#EC4899' },
-  { id: 'cu2', title: 'Bisaya Po & Opo', text: 'Showing respect to elders using "po" and "opo" is deeply ingrained in Filipino culture.', icon: 'hand-left', color: '#10B981' },
-  { id: 'cu3', title: 'Barkada Culture', text: 'Filipinos value "barkada" (friend group) deeply — social life revolves around shared meals and trips.', icon: 'people', color: '#F59E0B' },
-  { id: 'cu4', title: 'Bayanihan', text: 'A communal spirit where neighbors help each other move houses or complete big tasks together.', icon: 'home', color: '#3B82F6' },
-];
-
-const MOCK_EVENTS = [
-  { id: 'e1', title: 'Weekly Language Exchange', date: 'Every Saturday · 4PM', location: 'Cebu City Hall Plaza', icon: 'chatbubbles', color: '#14B8A6' },
-  { id: 'e2', title: 'Bisaya Karaoke Night', date: 'Friday · 8PM', location: 'KTV Lounge, IT Park', icon: 'musical-notes', color: '#EC4899' },
-  { id: 'e3', title: 'Food Trip: Carbon Market', date: 'Next Sunday · 9AM', location: 'Carbon Market, Cebu', icon: 'restaurant', color: '#F59E0B' },
-];
-
-const MOCK_DISCUSSIONS = [
-  { id: 'd1', title: 'Best way to learn Bisaya fast?', replies: 24, author: 'LearnerX' },
-  { id: 'd2', title: 'How to remember verb focus?', replies: 16, author: 'MariM' },
-  { id: 'd3', title: 'Suggestions for Cebuano movies?', replies: 31, author: 'AnnaL' },
-  { id: 'd4', title: 'Difference: Bisaya vs Cebuano?', replies: 12, author: 'JoeD' },
-];
-
-const MOCK_LEADERBOARD = [
-  { rank: 1, name: 'MariM', xp: 12450, streak: 21 },
-  { rank: 2, name: 'JunB', xp: 11320, streak: 18 },
-  { rank: 3, name: 'CebuGirl99', xp: 9870, streak: 15 },
-  { rank: 4, name: 'LearnerX', xp: 8450, streak: 12 },
-  { rank: 5, name: 'AnnaL', xp: 7910, streak: 10 },
-];
-
-const MOCK_POSTS = [
-  {
-    id: 'p1', title: 'Kumusta vs Kamusta — which is correct?', author_name: 'MariM', author_verified: true,
-    content: 'Both are widely used! "Kumusta" is closer to the Spanish "¿cómo está?" while "Kamusta" is the everyday informal spelling you will hear on the streets of Cebu.',
-    likes: 34, created_at: new Date(Date.now() - 3600e3).toISOString(),
-  },
-  {
-    id: 'p2', title: 'Practiced "Palihug" for 20 minutes today!', author_name: 'LearnerX',
-    content: 'The "h" in the middle trips me up. Saying it slowly helps — pa-LIH-oog. Native speakers understood me at the market!',
-    likes: 18, created_at: new Date(Date.now() - 7200e3).toISOString(),
-  },
-  {
-    id: 'p3', title: 'Daily phrase: "Way sapayan"', author_name: 'CebuGirl99', author_verified: true,
-    content: 'Literal: "no problem/for nothing". Use it when someone says salamat — reply "Way sapayan!" (No worries!).',
-    likes: 52, created_at: new Date(Date.now() - 10800e3).toISOString(),
-  },
-  {
-    id: 'p4', title: 'Anyone want to do a weekly language exchange in Cebu?', author_name: 'JunB',
-    content: 'I am a native Bisaya speaker learning English. Happy to trade conversations every Saturday morning at IT Park!',
-    likes: 27, created_at: new Date(Date.now() - 21600e3).toISOString(),
-  },
-  {
-    id: 'p5', title: 'Sinulog is coming — here is how to say "Happy Fiesta!"', author_name: 'Ana R.',
-    content: '"Malipayong pista!" Say it with a big smile. Locals will love you for it.',
-    likes: 61, created_at: new Date(Date.now() - 43200e3).toISOString(),
-  },
+const PERIODS = [
+  { key: 'weekly', label: 'This Week' },
+  { key: 'monthly', label: 'This Month' },
+  { key: 'all_time', label: 'All Time' },
 ];
 
 export default function CommunityScreen({ navigation }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { user } = useUser();
+  const { xp, streak, badges, addXp } = useGame();
+  const insets = useSafeAreaInsets();
+  const padTop = Platform.OS === 'ios' ? insets.top : spacing.xl;
+
   const [activeTab, setActiveTab] = useState('feed');
+  const [feedFilter, setFeedFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [usingSample, setUsingSample] = useState(false);
+  const [live, setLive] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newContent, setNewContent] = useState('');
+  const [createType, setCreateType] = useState('question');
+  const [showNotifications, setShowNotifications] = useState(false);
   const [expandedPost, setExpandedPost] = useState(null);
   const [comments, setComments] = useState({});
-  const [newComment, setNewComment] = useState('');
   const [translated, setTranslated] = useState({});
   const [bookmarked, setBookmarked] = useState({});
   const [liked, setLiked] = useState({});
-  const [helpful, setHelpful] = useState({});
-  const [questions, setQuestions] = useState(MOCK_QUESTIONS);
-  const [showAskSheet, setShowAskSheet] = useState(false);
-  const [askText, setAskText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [lbLoading, setLbLoading] = useState(true);
+  const [lbError, setLbError] = useState(false);
+  const [lbPeriod, setLbPeriod] = useState('weekly');
+  const [challengeData, setChallengeData] = useState([]);
+  const [weeklyChallenge, setWeeklyChallenge] = useState([]);
+  const [challengeLoading, setChallengeLoading] = useState(true);
+  const [challengeError, setChallengeError] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [savedPosts, setSavedPosts] = useState([]);
+  const [myActivity, setMyActivity] = useState([]);
+  const [savedPhrases, setSavedPhrases] = useState([]);
+  const [followed, setFollowed] = useState({});
+  const [joinedEvents, setJoinedEvents] = useState({});
+  const listRef = useRef(null);
 
-  async function loadPosts() {
+  const scrollY = useRef(new Animated.Value(0)).current;
+  // eslint-disable-next-line react-hooks/refs
+  const collapse = scrollY.interpolate({ inputRange: [0, 36], outputRange: [0, 1], extrapolate: 'clamp' });
+  const searchOpacity = collapse.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const searchTranslate = collapse.interpolate({ inputRange: [0, 1], outputRange: [0, -12] });
+  const subtitleOpacity = collapse.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  // eslint-disable-next-line react-hooks/refs
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true });
+  const scrollProps = { onScroll, scrollEventThrottle: 16 };
+
+  const levelInfo = useMemo(() => getLevel(Math.max(0, Number(xp) || 0)), [xp]);
+  const communityMetrics = useMemo(() => {
+    const all = Array.isArray(posts) ? posts : [];
+    const today = new Date().setHours(0, 0, 0, 0);
+    const todayPosts = all.filter((p) => new Date(p.created_at).getTime() >= today);
+    const questionsToday = todayPosts.filter((p) => p.type === 'question' || p.type === 'translation' || p.type === 'pronunciation').length;
+    const tipsToday = todayPosts.filter((p) => p.type === 'tip' || p.type === 'vocabulary').length;
+    const answersToday = all.filter((p) => (p.comments || 0) > 0).length;
+    return { questionsToday, tipsToday, answersToday };
+  }, [posts]);
+  const unread = notifications.filter((n) => !n.read).length;
+  const canPost = activeTab === 'feed' || activeTab === 'discover';
+  const searching = searchFocused && query.trim().length > 0;
+
+  const loadPosts = useCallback(async () => {
     setLoadError(false);
     try {
-      const data = await api.getCommunityPosts();
+      const { posts: data, live: isLive } = await communityMock.getPosts();
       setPosts(Array.isArray(data) ? data : []);
-      setUsingSample(false);
+      setLive(isLive);
+      const saves = await communityMock.getSaved();
+      setSavedPosts(saves);
     } catch {
-      if (!posts.length) {
-        setPosts(MOCK_POSTS);
-        setUsingSample(true);
-      }
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { loadPosts(); }, []);
+  useEffect(() => {
+    const t = setTimeout(loadPosts, 0);
+    return () => clearTimeout(t);
+  }, [loadPosts]);
+
+  useEffect(() => {
+    communityMock.getNotifications().then(setNotifications).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.getSavedPhrases().then((d) => { if (Array.isArray(d)) setSavedPhrases(d); }).catch(() => {});
+  }, []);
+
+  const speakPhrase = (text) => {
+    try {
+      Speech.speak(text, { language: 'ceb', rate: 0.8, pitch: 1.0 });
+    } catch {}
+  };
+
+  const toggleSavePhrase = async (phrase) => {
+    const isSaved = savedPhrases.some((s) => s.phrase === phrase.native);
+    try {
+      if (isSaved) {
+        const found = savedPhrases.find((s) => s.phrase === phrase.native);
+        if (found?.id) await api.deleteSavedPhrase(found.id);
+        setSavedPhrases((prev) => prev.filter((s) => s.phrase !== phrase.native));
+      } else {
+        const res = await api.savePhrase(phrase.native, 'Bisaya', phrase.category);
+        setSavedPhrases((prev) => [...prev, { id: res?.id, phrase: phrase.native, category: phrase.category }]);
+      }
+    } catch {}
+  };
+
+  const practicePhrase = (phrase) => {
+    navigation.navigate('Pronunciation');
+  };
+
+  const loadLeaderboard = useCallback(async (period = lbPeriod) => {
+    setLbLoading(true);
+    setLbError(false);
+    try {
+      const data = await communityMock.getLeaderboard(period);
+      setLeaderboard(Array.isArray(data) ? data : []);
+    } catch {
+      setLbError(true);
+      setLeaderboard([]);
+    } finally {
+      setLbLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'leaderboard') {
+      const t = setTimeout(() => loadLeaderboard(lbPeriod), 0);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, lbPeriod, loadLeaderboard]);
+
+  const loadChallenges = async () => {
+    setChallengeLoading(true);
+    setChallengeError(false);
+    try {
+      const [daily, weekly] = await Promise.allSettled([
+        api.getDailyChallenge(),
+        api.getWeeklyChallenge(),
+      ]);
+      setChallengeData(daily.status === 'fulfilled' && Array.isArray(daily.value) ? daily.value : []);
+      setWeeklyChallenge(weekly.status === 'fulfilled' && Array.isArray(weekly.value) ? weekly.value : []);
+      if (daily.status === 'rejected' && weekly.status === 'rejected') setChallengeError(true);
+    } catch {
+      setChallengeError(true);
+    } finally {
+      setChallengeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'challenges') {
+      const t = setTimeout(loadChallenges, 0);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab]);
+
+  const loadMyActivity = useCallback(async () => {
+    const { posts: all } = await communityMock.getPosts();
+    const mine = all.filter((p) => p.author_name === (user?.fullname?.split(' ')[0] || 'You'));
+    setMyActivity(mine);
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'me') {
+      communityMock.getSaved().then(setSavedPosts).catch(() => {});
+      const t = setTimeout(loadMyActivity, 0);
+      return () => clearTimeout(t);
+    }
+  }, [activeTab, loadMyActivity]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -160,197 +229,277 @@ export default function CommunityScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const handleCreatePost = async () => {
-    if (!newTitle.trim()) return Alert.alert('Missing Title', 'Please enter a title for your post.');
+  const openCreate = (type = 'question') => {
+    setCreateType(type);
+    setShowCreate(true);
+  };
+
+  const handleCreatePost = async ({ type, native, english, tags }) => {
     try {
-      await api.createCommunityPost(newTitle, newContent);
+      const post = await communityMock.createPost({ type, native, english, tags });
+      setPosts((prev) => [post, ...prev]);
       setShowCreate(false);
-      setNewTitle('');
-      setNewContent('');
-      loadPosts();
+      setActiveTab('feed');
+      if (type === 'question') {
+        await addXp(10, 'community_question');
+        Alert.alert('Question posted', '+10 XP for asking the community!');
+      } else {
+        Alert.alert('Posted', 'Thanks for sharing with the community!');
+      }
     } catch (err) {
       Alert.alert('Error', err.message);
     }
-  };
-
-  const openCreateSheet = () => {
-    setNewTitle('');
-    setNewContent('');
-    setShowCreate(true);
   };
 
   const toggleComments = async (postId) => {
     if (expandedPost === postId) { setExpandedPost(null); return; }
     setExpandedPost(postId);
     try {
-      const data = await api.getPostComments(postId);
+      const data = await communityMock.getComments(postId);
       setComments((prev) => ({ ...prev, [postId]: data }));
     } catch {}
   };
 
-  const handleAddComment = async (postId) => {
-    if (!newComment.trim()) return;
+  const handleAddComment = async (postId, comment) => {
+    if (!comment.trim()) return;
     try {
-      await api.createPostComment(postId, newComment);
-      setNewComment('');
-      const data = await api.getPostComments(postId);
+      await communityMock.addComment(postId, comment);
+      const data = await communityMock.getComments(postId);
       setComments((prev) => ({ ...prev, [postId]: data }));
     } catch {}
   };
 
-  const handleShare = async (title, content) => {
-    try {
-      await Share.share({ title, message: `${title}\n${content || ''}\n— shared from SultiAI` });
-    } catch {}
+  const handleToggleLike = async (postId) => {
+    const isLiked = !!liked[postId];
+    const next = await communityMock.toggleLike(postId, isLiked);
+    setLiked((prev) => ({ ...prev, [postId]: next }));
   };
 
-  const submitQuestion = () => {
-    if (!askText.trim()) return;
-    setQuestions((prev) => [
-      { id: `q_${Date.now()}`, user: user?.fullname?.split(' ')[0] || 'You', text: askText, english: 'New question', helpful: 0, voice: false },
-      ...prev,
-    ]);
-    setAskText('');
-    setShowAskSheet(false);
-    Alert.alert('Question posted', 'Native speakers have been notified to help.');
+  const handleToggleSave = async (postId) => {
+    const isSaved = !!bookmarked[postId];
+    const next = await communityMock.toggleSave(postId, isSaved);
+    setBookmarked((prev) => ({ ...prev, [postId]: next }));
+    if (next) {
+      const saves = await communityMock.getSaved();
+      setSavedPosts(saves);
+    }
   };
 
-  const renderSegments = () => (
-    <View style={[styles.segmentBar, { borderBottomColor: colors.border }]}>
-      <View style={styles.segmentRow}>
-        {TABS.map((t) => {
+  const handleMarkHelpful = async (post) => {
+    await addXp(5, 'community_helpful');
+    Alert.alert('Marked helpful', 'The author earned +15 XP for their answer. +5 XP to you for engaging!');
+  };
+
+  const handleReport = async (post) => {
+    Alert.alert('Report sent', `Thanks for keeping the community safe. We have been notified about "${post.native}".`);
+  };
+
+  const filteredPosts = posts.filter((p) => {
+    if (typeFilter !== 'all' && p.type !== typeFilter) return false;
+    if (feedFilter === 'popular') return (p.likes || 0) >= 20;
+    if (feedFilter === 'following') return p.is_native === true;
+    return true;
+  });
+
+  const sortedPosts = [...filteredPosts].sort((a, b) => {
+    if (feedFilter === 'latest') return new Date(b.created_at) - new Date(a.created_at);
+    if (feedFilter === 'popular') return (b.likes || 0) - (a.likes || 0);
+    return 0;
+  });
+
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return { posts: [], phrases: [], culture: [], experts: [] };
+    const matchPosts = posts.filter((p) =>
+      `${p.native} ${p.english} ${p.content || ''} ${(p.tags || []).join(' ')} ${p.author_name}`.toLowerCase().includes(q),
+    );
+    const matchPhrases = MOCK_PHRASES.filter((p) => `${p.native} ${p.english}`.toLowerCase().includes(q));
+    const matchCulture = MOCK_CULTURE.filter((c) => `${c.title} ${c.text}`.toLowerCase().includes(q));
+    const matchExperts = MOCK_EXPERTS.filter((e) => `${e.name} ${e.bio}`.toLowerCase().includes(q));
+    return { posts: matchPosts, phrases: matchPhrases, culture: matchCulture, experts: matchExperts };
+  }, [query, posts]);
+
+  const myRank = useMemo(() => {
+    const name = user?.fullname?.split(' ')[0] || 'You';
+    const idx = leaderboard.findIndex((l) => (l.name || '').toLowerCase() === name.toLowerCase());
+    if (idx === -1) return null;
+    return { rank: idx + 1, xp: Number(leaderboard[idx].xp) || 0, streak: Number(leaderboard[idx].streak) || 0 };
+  }, [leaderboard, user]);
+
+  const renderTabs = () => (
+    <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabRow}
+        alwaysBounceHorizontal={false}
+      >
+        {PRIMARY_TABS.map((t) => {
           const active = activeTab === t.key;
           return (
             <TouchableOpacity
               key={t.key}
-              style={[styles.segmentChip, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              style={[styles.tab, active && { backgroundColor: colors.primaryLight }]}
               onPress={() => setActiveTab(t.key)}
+              activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <Ionicons name={active ? t.icon : t.iconOutline} size={15} color={active ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.tabText, { color: active ? colors.primary : colors.textSecondary }]}>{t.label}</Text>
+              {active && <View style={[styles.tabIndicator, { backgroundColor: colors.primary }]} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
+  const renderPeriodFilters = () => (
+    <View style={[styles.periodBar, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.periodRow}
+        alwaysBounceHorizontal={false}
+      >
+        {PERIODS.map((p) => {
+          const active = lbPeriod === p.key;
+          return (
+            <TouchableOpacity
+              key={p.key}
+              style={[styles.periodChip, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              onPress={() => setLbPeriod(p.key)}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
             >
-              <Ionicons name={t.icon} size={14} color={active ? '#fff' : colors.textSecondary} />
-              <Text style={[styles.segmentText, { color: active ? '#fff' : colors.textSecondary }]}>{t.label}</Text>
+              <Text style={[styles.periodChipText, { color: active ? '#fff' : colors.textSecondary }]}>{p.label}</Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 
   const renderFeed = () => (
     <FlatList
-      data={posts}
+      data={sortedPosts}
       keyExtractor={(item) => item.id?.toString()}
       contentContainerStyle={styles.list}
       refreshing={refreshing}
       onRefresh={onRefresh}
+      {...scrollProps}
       ListHeaderComponent={
-        usingSample ? (
-          <View style={[styles.sampleBanner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
-            <Ionicons name="cloud-offline-outline" size={16} color={colors.primary} />
-            <Text style={[styles.sampleBannerText, { color: colors.primary }]}>Showing sample posts — connect to the server to see the live community feed.</Text>
-          </View>
-        ) : null
-      }
-      renderItem={({ item }) => {
-        const isTranslated = !!translated[item.id];
-        const isBookmarked = !!bookmarked[item.id];
-        const isLiked = !!liked[item.id];
-        return (
-          <Card style={styles.postCard}>
-            <View style={styles.postHeader}>
-              <Avatar name={item.author_name || item.author?.name} size={36} />
-              <View style={styles.postAuthor}>
-                <Text style={[styles.authorName, { color: colors.text }]}>
-                  {item.author_name || item.author?.name || 'Anonymous'}
-                </Text>
-                <Text style={[styles.postDate, { color: colors.textLight }]}>
-                  {formatDate(item.created_at)}
-                </Text>
-              </View>
-              {item.author_verified && <Badge icon="shield-checkmark" title="Native" variant="success" size="sm" />}
+        <>
+          {!live && (
+            <View style={[styles.sampleBanner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '30' }]}>
+              <Ionicons name="cloud-offline-outline" size={16} color={colors.primary} />
+              <Text style={[styles.sampleBannerText, { color: colors.primary }]}>Showing sample posts — connect to the server to see the live community feed.</Text>
             </View>
-            <Text style={[styles.postTitle, { color: colors.text }]}>{item.title}</Text>
-            {item.content && (
-              <Text style={[styles.postContent, { color: colors.textSecondary }]}>
-                {isTranslated ? item.bisaya_translation || item.content : item.content}
-              </Text>
-            )}
-            {isTranslated && (
-              <View style={[styles.translateTag, { backgroundColor: colors.primary + '12' }]}>
-                <Ionicons name="language" size={12} color={colors.primary} />
-                <Text style={[styles.translateTagText, { color: colors.primary }]}>Bisaya</Text>
+          )}
+          <Card style={styles.metricsCard}>
+            <View style={styles.metric}>
+              <View style={[styles.metricIcon, { backgroundColor: colors.primary + '12' }]}>
+                <Ionicons name="help-circle" size={16} color={colors.primary} />
               </View>
-            )}
-            <View style={styles.postActions}>
-              <TouchableOpacity onPress={() => toggleComments(item.id)} style={styles.actionRow}>
-                <Ionicons name="chatbubble-outline" size={18} color={colors.textLight} />
-                <Text style={[styles.actionText, { color: colors.textLight }]}>Comment</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                style={styles.actionRow}
-              >
-                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={18} color={isLiked ? colors.error : colors.textLight} />
-                <Text style={[styles.actionText, { color: isLiked ? colors.error : colors.textLight }]}>
-                  {(item.likes || 0) + (isLiked ? 1 : 0)}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setTranslated((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                style={styles.actionRow}
-              >
-                <Ionicons name="language" size={18} color={isTranslated ? colors.primary : colors.textLight} />
-                <Text style={[styles.actionText, { color: isTranslated ? colors.primary : colors.textLight }]}>Translate</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setBookmarked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                style={styles.actionRow}
-              >
-                <Ionicons name={isBookmarked ? 'bookmark' : 'bookmark-outline'} size={18} color={isBookmarked ? colors.accent : colors.textLight} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleShare(item.title, item.content)} style={styles.actionRow}>
-                <Ionicons name="share-social-outline" size={18} color={colors.textLight} />
-              </TouchableOpacity>
+              <View style={styles.metricInfo}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{communityMetrics.questionsToday}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>questions today</Text>
+              </View>
             </View>
-            {expandedPost === item.id && (
-              <View style={[styles.commentsSection, { borderTopColor: colors.border }]}>
-                {(comments[item.id] || []).map((c, i) => (
-                  <View key={i} style={styles.commentRow}>
-                    <Avatar name={c.author_name} size={24} />
-                    <View style={styles.commentContent}>
-                      <Text style={[styles.commentAuthor, { color: colors.text }]}>{c.author_name || 'Anonymous'}</Text>
-                      <Text style={[styles.commentText, { color: colors.textSecondary }]}>{c.comment}</Text>
-                    </View>
-                  </View>
-                ))}
-                <View style={styles.commentInputRow}>
-                  <TextInput
-                    id="comment"
-                    name="comment"
-                    testID="comment-input"
-                    style={[styles.commentInput, { color: colors.text, borderColor: colors.border, backgroundColor: isDark ? colors.surface : colors.surfaceSecondary }]}
-                    placeholder="Add a comment..."
-                    placeholderTextColor={colors.textLight}
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    autoComplete="off"
-                  />
-                  <TouchableOpacity
-                    onPress={() => handleAddComment(item.id)}
-                    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Send comment"
-                  >
-                    <Ionicons name="send" size={20} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
+            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.metric}>
+              <View style={[styles.metricIcon, { backgroundColor: colors.accent + '18' }]}>
+                <Ionicons name="chatbubble-ellipses" size={16} color={colors.accent} />
               </View>
-            )}
+              <View style={styles.metricInfo}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{communityMetrics.answersToday}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>answered today</Text>
+              </View>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.metric}>
+              <View style={[styles.metricIcon, { backgroundColor: colors.success + '14' }]}>
+                <Ionicons name="bulb" size={16} color={colors.success} />
+              </View>
+              <View style={styles.metricInfo}>
+                <Text style={[styles.metricValue, { color: colors.text }]}>{communityMetrics.tipsToday}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>tips shared</Text>
+              </View>
+            </View>
           </Card>
-        );
-      }}
+          <View style={styles.filterRow}>
+            <FlatList
+              horizontal
+              data={FEED_FILTERS}
+              keyExtractor={(item) => item.key}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const active = feedFilter === item.key;
+                return (
+                  <TouchableOpacity
+                    style={[styles.filterChip, active && { backgroundColor: colors.primary }]}
+                    onPress={() => setFeedFilter(item.key)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Ionicons name={item.icon} size={13} color={active ? '#fff' : colors.textSecondary} />
+                    <Text style={[styles.filterChipText, { color: active ? '#fff' : colors.textSecondary }]}>{item.label}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+          <View style={styles.filterRow}>
+            <FlatList
+              horizontal
+              data={TYPE_FILTERS}
+              keyExtractor={(item) => item.key}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const active = typeFilter === item.key;
+                return (
+                  <TouchableOpacity
+                    style={[styles.typeChip, active && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                    onPress={() => setTypeFilter(item.key)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Ionicons name={item.icon} size={13} color={active ? colors.primary : colors.textSecondary} />
+                    <Text style={[styles.typeChipText, { color: active ? colors.primary : colors.textSecondary }]}>{item.label}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+          {feedFilter === 'following' && (
+            <Card style={styles.hintCard}>
+              <Ionicons name="people" size={18} color={colors.primary} />
+              <Text style={[styles.hintText, { color: colors.textSecondary }]}>Posts from native speakers and verified learners you follow.</Text>
+            </Card>
+          )}
+        </>
+      }
+      renderItem={({ item }) => (
+        <PostCard
+          post={item}
+          liked={!!liked[item.id]}
+          saved={!!bookmarked[item.id]}
+          translated={!!translated[item.id]}
+          expanded={expandedPost === item.id}
+          comments={comments[item.id] || []}
+          onToggleComments={toggleComments}
+          onAddComment={handleAddComment}
+          onToggleLike={handleToggleLike}
+          onToggleSave={handleToggleSave}
+          onToggleTranslate={(id) => setTranslated((prev) => ({ ...prev, [id]: !prev[id] }))}
+          onMarkHelpful={handleMarkHelpful}
+          onReport={handleReport}
+        />
+      )}
       ListEmptyComponent={
         loadError ? (
           <ErrorState
@@ -361,223 +510,624 @@ export default function CommunityScreen({ navigation }) {
             onAction={loadPosts}
           />
         ) : (
-          <EmptyState
-            icon="people"
-            title="No posts yet"
-            message="Be the first to share something with the community!"
-            actionLabel="Create Post"
-            onAction={openCreateSheet}
-          />
+          <View style={styles.emptyInvite}>
+            <View style={[styles.emptyInviteIcon, { backgroundColor: colors.primaryLight }]}>
+              <Ionicons name="leaf" size={40} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyInviteTitle, { color: colors.text }]}>Your community starts here.</Text>
+            <Text style={[styles.emptyInviteMessage, { color: colors.textSecondary }]}>
+              Ask a Bisaya question, share a phrase you&apos;ve learned, or help another learner grow.
+            </Text>
+            <View style={styles.emptyInviteActions}>
+              <TouchableOpacity
+                style={[styles.emptyInviteBtn, { backgroundColor: colors.primary }]}
+                onPress={() => openCreate('question')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                <Ionicons name="help-circle" size={16} color="#fff" />
+                <Text style={styles.emptyInviteBtnText}>Ask a Question</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.emptyInviteBtn, styles.emptyInviteBtnOutline, { borderColor: colors.primary }]}
+                onPress={() => openCreate('tip')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                <Ionicons name="bulb" size={16} color={colors.primary} />
+                <Text style={[styles.emptyInviteBtnText, { color: colors.primary }]}>Share a Learning Tip</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )
       }
     />
   );
 
-  const renderChallenges = () => (
-    <FlatList
-      data={MOCK_CHALLENGES}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={[styles.hubIcon, { backgroundColor: item.color + '20' }]}>
-            <Ionicons name={item.icon} size={22} color={item.color} />
-          </View>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubTitle, { color: colors.text }]}>{item.title}</Text>
-            <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
-          </View>
-          <View style={[styles.xpPill, { backgroundColor: item.color + '15' }]}>
-            <Ionicons name="star" size={12} color={item.color} />
-            <Text style={[styles.xpPillText, { color: item.color }]}>+{item.xp} XP</Text>
-          </View>
-        </Card>
-      )}
-    />
-  );
+  const renderDiscover = () => {
+    const sections = [
+      { key: 'experts', title: 'Native Speakers', subtitle: 'Learn from real Bisaya speakers', icon: 'shield-checkmark', color: '#14B8A6', data: MOCK_EXPERTS },
+      { key: 'phrases', title: 'Daily Phrases', subtitle: 'Tap to hear pronunciation', icon: 'chatbubble', color: '#8B5CF6', data: MOCK_PHRASES },
+      { key: 'culture', title: 'Culture & Tradition', subtitle: 'Understand the heart of the Bisaya people', icon: 'color-palette', color: '#EC4899', data: MOCK_CULTURE },
+      { key: 'events', title: 'Local Events', subtitle: 'Connect with learners in real life', icon: 'calendar', color: '#F59E0B', data: MOCK_EVENTS },
+    ];
 
-  const renderAsk = () => (
-    <FlatList
-      data={questions}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      ListHeaderComponent={
-        <TouchableOpacity
-          style={[styles.askComposer, { backgroundColor: colors.primary }]}
-          onPress={() => setShowAskSheet(true)}
-          activeOpacity={0.9}
-        >
-          <Ionicons name="mic" size={20} color="#fff" />
-          <Text style={styles.askComposerText}>Ask a native speaker in Bisaya</Text>
-        </TouchableOpacity>
-      }
-      renderItem={({ item }) => {
-        const isHelpful = !!helpful[item.id];
-        return (
-          <Card style={styles.hubCard}>
-            <View style={styles.postHeader}>
-              {item.voice ? (
-                <View style={[styles.voiceAvatar, { backgroundColor: colors.softPurple }]}>
-                  <Ionicons name="mic" size={16} color={colors.primary} />
-                </View>
-              ) : (
-                <Avatar name={item.user} size={32} />
-              )}
-              <View style={styles.postAuthor}>
-                <Text style={[styles.authorName, { color: colors.text }]}>{item.user}</Text>
-                {item.voice && (
-                  <View style={styles.voiceTag}>
-                    <Ionicons name="mic" size={10} color={colors.primary} />
-                    <Text style={[styles.voiceTagText, { color: colors.primary }]}>Voice question</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            <Text style={[styles.askText, { color: colors.text }]}>{item.text}</Text>
-            <Text style={[styles.postContent, { color: colors.textSecondary }]}>{item.english}</Text>
-            <View style={styles.postActions}>
-              <TouchableOpacity
-                onPress={() => setHelpful((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                style={styles.actionRow}
-              >
-                <Ionicons name={isHelpful ? 'thumbs-up' : 'thumbs-up-outline'} size={18} color={isHelpful ? colors.primary : colors.textLight} />
-                <Text style={[styles.actionText, { color: isHelpful ? colors.primary : colors.textLight }]}>
-                  Helpful · {(item.helpful || 0) + (isHelpful ? 1 : 0)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-        );
-      }}
-    />
-  );
+    const renderExpert = (d) => (
+      <Card key={d.id} style={styles.discoverCard}>
+        <Avatar name={d.name} size={40} />
+        <View style={styles.discoverInfo}>
+          <View style={styles.discoverNameRow}>
+            <Text style={[styles.discoverName, { color: colors.text }]}>{d.name}</Text>
+            <Badge icon="shield-checkmark" title="Native" variant="success" size="sm" />
+          </View>
+          <Text style={[styles.discoverDesc, { color: colors.textSecondary }]}>{d.bio}</Text>
+          <View style={styles.discoverMetaRow}>
+            <Ionicons name="people" size={11} color={colors.textLight} />
+            <Text style={[styles.discoverMeta, { color: colors.textLight }]}>{d.followers.toLocaleString()} followers · {d.answers} answers</Text>
+          </View>
+          <View style={[styles.statusPill, { backgroundColor: d.lastActive === 'today' ? colors.success + '14' : colors.surfaceSecondary }]}>
+            <View style={[styles.statusDot, { backgroundColor: d.lastActive === 'today' ? colors.success : colors.textLight }]} />
+            <Text style={[styles.statusText, { color: d.lastActive === 'today' ? colors.success : colors.textSecondary }]}>
+              {d.lastActive === 'today' ? 'Active today' : 'Active this week'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.discoverActions}>
+          <TouchableOpacity
+            style={[styles.followBtn, { backgroundColor: followed[d.id] ? colors.surfaceSecondary : colors.primary }]}
+            onPress={() => {
+              setFollowed((prev) => ({ ...prev, [d.id]: !prev[d.id] }));
+              Alert.alert(followed[d.id] ? 'Unfollowed' : 'Following', followed[d.id] ? `You unfollowed ${d.name}.` : `You are now following ${d.name}!`);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.followBtnText, { color: followed[d.id] ? colors.text : '#fff' }]}>{followed[d.id] ? 'Following' : 'Follow'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.askBtn, { borderColor: colors.primary }]}
+            onPress={() => openCreate('question')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="help-circle" size={14} color={colors.primary} />
+            <Text style={[styles.askBtnText, { color: colors.primary }]}>Ask a Question</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    );
 
-  const renderPhrases = () => (
-    <FlatList
-      data={MOCK_PHRASES}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={[styles.phraseIcon, { backgroundColor: item.color + '20' }]}>
-            <Ionicons name="chatbubble" size={20} color={item.color} />
+    const renderPhrase = (d) => {
+      const isSaved = savedPhrases.some((s) => s.phrase === d.native);
+      return (
+        <Card key={d.id} style={styles.phraseCard}>
+          <View style={styles.phraseRow}>
+            <View style={[styles.discoverIcon, { backgroundColor: d.color + '20' }]}>
+              <Ionicons name="chatbubble" size={18} color={d.color} />
+            </View>
+            <View style={styles.discoverInfo}>
+              <Text style={[styles.phraseNative, { color: colors.text }]}>{d.native}</Text>
+              <Text style={[styles.discoverDesc, { color: colors.textSecondary }]}>
+                &quot;{d.english}&quot;
+              </Text>
+              <Text style={[styles.discoverMeta, { color: colors.textLight }]}>{d.category} · shared by {d.user}</Text>
+            </View>
           </View>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.phraseNative, { color: colors.text }]}>{item.native}</Text>
-            <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>{item.english}</Text>
-            <Text style={[styles.phraseUser, { color: colors.textLight }]}>Shared by {item.user}</Text>
-          </View>
-          <View style={styles.actionCol}>
-            <TouchableOpacity onPress={() => handleShare(item.native, item.english)} style={styles.actionRow}>
-              <Ionicons name="share-social-outline" size={18} color={colors.textLight} />
+          {d.bisaya_note && (
+            <View style={[styles.phraseNote, { backgroundColor: colors.primary + '0D' }]}>
+              <Ionicons name="information-circle" size={13} color={colors.primary} />
+              <Text style={[styles.phraseNoteText, { color: colors.primary }]}>{d.bisaya_note}</Text>
+            </View>
+          )}
+          <View style={styles.phraseActions}>
+            <TouchableOpacity style={styles.phraseAction} onPress={() => speakPhrase(d.native)} activeOpacity={0.7}>
+              <Ionicons name="volume-high" size={16} color={colors.primary} />
+              <Text style={[styles.phraseActionText, { color: colors.primary }]}>Listen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.phraseAction} onPress={() => toggleSavePhrase(d)} activeOpacity={0.7}>
+              <Ionicons name={isSaved ? 'star' : 'star-outline'} size={16} color={isSaved ? colors.accent : colors.textSecondary} />
+              <Text style={[styles.phraseActionText, { color: isSaved ? colors.accent : colors.textSecondary }]}>{isSaved ? 'Saved' : 'Save'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.phraseAction} onPress={() => practicePhrase(d)} activeOpacity={0.7}>
+              <Ionicons name="mic" size={16} color={colors.success} />
+              <Text style={[styles.phraseActionText, { color: colors.success }]}>Practice</Text>
             </TouchableOpacity>
           </View>
         </Card>
-      )}
-    />
-  );
+      );
+    };
 
-  const renderCulture = () => (
-    <FlatList
-      data={MOCK_CULTURE}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={[styles.hubIcon, { backgroundColor: item.color + '20' }]}>
-            <Ionicons name={item.icon} size={22} color={item.color} />
+    const renderCulture = (d) => (
+      <Card key={d.id} style={styles.discoverCard}>
+        <View style={[styles.discoverIcon, { backgroundColor: d.color + '20' }]}>
+          <Ionicons name={d.icon} size={20} color={d.color} />
+        </View>
+        <View style={styles.discoverInfo}>
+          <View style={styles.discoverNameRow}>
+            <Text style={[styles.discoverName, { color: colors.text }]}>{d.title}</Text>
+            <Badge title={d.category} variant="default" size="sm" />
           </View>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubTitle, { color: colors.text }]}>{item.title}</Text>
-            <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>{item.text}</Text>
-          </View>
-        </Card>
-      )}
-    />
-  );
-
-  const renderEvents = () => (
-    <FlatList
-      data={MOCK_EVENTS}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={[styles.hubIcon, { backgroundColor: item.color + '20' }]}>
-            <Ionicons name={item.icon} size={22} color={item.color} />
-          </View>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubTitle, { color: colors.text }]}>{item.title}</Text>
-            <View style={styles.eventRow}>
-              <Ionicons name="calendar-outline" size={12} color={colors.textLight} />
-              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{item.date}</Text>
-            </View>
-            <View style={styles.eventRow}>
-              <Ionicons name="location-outline" size={12} color={colors.textLight} />
-              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{item.location}</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={[styles.joinBtn, { backgroundColor: colors.primary }]} onPress={() => Alert.alert('RSVP', `You RSVP'd to ${item.title}!`)}>
-            <Text style={styles.joinBtnText}>RSVP</Text>
+          <Text style={[styles.discoverDesc, { color: colors.textSecondary }]} numberOfLines={2}>{d.text}</Text>
+          <Text style={[styles.discoverMeta, { color: colors.textLight }]}>{d.length}</Text>
+        </View>
+        <View style={styles.discoverActions}>
+          <TouchableOpacity
+            style={[styles.askBtn, { borderColor: colors.primary }]}
+            onPress={() => Alert.alert(d.title, `${d.text}\n\nFull article coming soon.`)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="book-outline" size={14} color={colors.primary} />
+            <Text style={[styles.askBtnText, { color: colors.primary }]}>Read more</Text>
           </TouchableOpacity>
-        </Card>
-      )}
-    />
-  );
+        </View>
+      </Card>
+    );
 
-  const renderDiscussions = () => (
-    <FlatList
-      data={MOCK_DISCUSSIONS}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubTitle, { color: colors.text }]}>{item.title}</Text>
-            <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>by {item.author}</Text>
-          </View>
-          <View style={styles.repliesPill}>
-            <Ionicons name="chatbubble-outline" size={12} color={colors.textSecondary} />
-            <Text style={[styles.repliesText, { color: colors.textSecondary }]}>{item.replies}</Text>
-          </View>
-        </Card>
-      )}
-    />
-  );
-
-  const renderLeaderboard = () => (
-    <FlatList
-      data={MOCK_LEADERBOARD}
-      keyExtractor={(item) => item.name}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <Card style={styles.hubCard}>
-          <View style={[styles.rankBadge, item.rank === 1 && { backgroundColor: colors.accent }]}>
-            <Text style={[styles.rankText, item.rank === 1 && { color: '#fff' }]}>{item.rank}</Text>
-          </View>
-          <Avatar name={item.name} size={36} />
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubTitle, { color: colors.text }]}>{item.name}</Text>
-            <View style={styles.eventRow}>
-              <Ionicons name="flame" size={12} color={colors.warning} />
-              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{item.streak} day streak</Text>
+    const renderEvent = (d) => {
+      const joined = !!joinedEvents[d.id];
+      return (
+        <Card key={d.id} style={styles.eventCard}>
+          <View style={styles.eventHeader}>
+            <View style={[styles.eventIcon, { backgroundColor: d.color + '20' }]}>
+              <Ionicons name={d.icon} size={20} color={d.color} />
+            </View>
+            <View style={styles.discoverInfo}>
+              <Text style={[styles.discoverName, { color: colors.text }]}>{d.title}</Text>
+              {d.online && <Badge icon="videocam" title="Online" variant="primary" size="sm" />}
             </View>
           </View>
-          <Text style={[styles.xpValue, { color: colors.primary }]}>{item.xp.toLocaleString()} XP</Text>
+          <View style={styles.eventDetails}>
+            <View style={styles.eventRow}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{d.date} · {d.time}</Text>
+            </View>
+            <View style={styles.eventRow}>
+              <Ionicons name={d.online ? 'globe-outline' : 'location-outline'} size={14} color={colors.textSecondary} />
+              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{d.location}</Text>
+            </View>
+            <View style={styles.eventRow}>
+              <Ionicons name="people" size={14} color={colors.textSecondary} />
+              <Text style={[styles.eventText, { color: colors.textSecondary }]}>{d.going} going{d.spots ? ` · ${d.spots} spots left` : ''}</Text>
+            </View>
+          </View>
+          <View style={styles.eventActions}>
+            <TouchableOpacity
+              style={[styles.joinBtn, { backgroundColor: joined ? colors.surfaceSecondary : colors.primary }]}
+              onPress={() => {
+                setJoinedEvents((prev) => ({ ...prev, [d.id]: !prev[d.id] }));
+                Alert.alert(joined ? 'Left event' : 'Joined event', joined ? `You left ${d.title}.` : `You joined ${d.title}! We'll remind you before it starts.`);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.joinBtnText, { color: joined ? colors.text : '#fff' }]}>{joined ? 'Joined ✓' : 'Join Event'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.remindBtn, { borderColor: colors.primary }]}
+              onPress={() => Alert.alert('Reminder set', `We'll remind you before "${d.title}".`)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications-outline" size={14} color={colors.primary} />
+              <Text style={[styles.remindBtnText, { color: colors.primary }]}>Remind Me</Text>
+            </TouchableOpacity>
+          </View>
         </Card>
+      );
+    };
+
+    const renderItemFor = (key, d) => {
+      switch (key) {
+        case 'experts': return renderExpert(d);
+        case 'phrases': return renderPhrase(d);
+        case 'culture': return renderCulture(d);
+        case 'events': return renderEvent(d);
+        default: return null;
+      }
+    };
+
+    return (
+      <FlatList
+        ref={listRef}
+        data={sections}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={styles.list}
+        {...scrollProps}
+        ListFooterComponent={
+          <TouchableOpacity
+            style={[styles.backTop, { borderColor: colors.border }]}
+            onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-up" size={16} color={colors.primary} />
+            <Text style={[styles.backTopText, { color: colors.primary }]}>Back to Top</Text>
+          </TouchableOpacity>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleWrap}>
+                <Ionicons name={item.icon} size={16} color={item.color} />
+                <View>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.sectionSubtitle, { color: colors.textLight }]}>{item.subtitle}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => Alert.alert(item.title, `Full ${item.title.toLowerCase()} list coming soon.`)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.viewAllText, { color: colors.primary }]}>View All →</Text>
+              </TouchableOpacity>
+            </View>
+            {item.data.map((d) => renderItemFor(item.key, d))}
+          </View>
+        )}
+      />
+    );
+  };
+
+  const renderChallenges = () => {
+    const daily = Array.isArray(challengeData) ? challengeData : [];
+    const weekly = Array.isArray(weeklyChallenge) ? weeklyChallenge : [];
+    if (challengeLoading) return <LoadingState fullScreen />;
+    if (challengeError && daily.length === 0 && weekly.length === 0) {
+      return (
+        <View style={styles.list}>
+          <ErrorState
+            icon="trophy-outline"
+            title="Could not load challenges"
+            message="Check your connection and try again."
+            actionLabel="Retry"
+            onAction={loadChallenges}
+          />
+        </View>
+      );
+    }
+    const items = [
+      ...daily.map((c) => ({
+        id: `d-${c.id}`, title: c.title, desc: c.description || '', completed: !!c.completed,
+        xp: Number(c.xpReward) || Number(c.xp_reward) || 20, icon: c.icon || 'sunny', color: '#3B82F6', scenario: c.scenario, kind: 'Daily',
+      })),
+      ...weekly.map((c) => ({
+        id: `w-${c.id}`, title: c.title, desc: c.description || '', completed: !!c.completed,
+        xp: Number(c.xpReward) || Number(c.xp_reward) || 100, icon: c.icon || 'calendar', color: '#8B5CF6', scenario: c.scenario, kind: 'Weekly',
+      })),
+    ];
+
+    if (items.length === 0) {
+      return (
+        <View style={styles.list}>
+          <EmptyState icon="trophy-outline" title="No active challenges" message="New challenges drop regularly — check back soon." />
+        </View>
+      );
+    }
+    return (
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        {...scrollProps}
+        ListHeaderComponent={
+          <Card style={[styles.streakCard, { borderColor: colors.accent + '40' }]}>
+            <Ionicons name="flame" size={26} color={colors.warning} />
+            <View style={styles.hubInfo}>
+              <Text style={[styles.hubTitle, { color: colors.text }]}>Your streak: {Math.max(0, Number(streak) || 0)} days</Text>
+              <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>Keep the momentum — every completed challenge earns XP and coins.</Text>
+            </View>
+          </Card>
+        }
+        renderItem={({ item }) => (
+          <Card style={styles.hubCard}>
+            <View style={[styles.hubIcon, { backgroundColor: item.color + '20' }]}>
+              <Ionicons name={item.icon} size={22} color={item.color} />
+            </View>
+            <View style={styles.hubInfo}>
+              <View style={styles.eventRow}>
+                <Text style={[styles.hubTitle, { color: colors.text }]}>{item.title}</Text>
+                <View style={[styles.typeTag, { backgroundColor: item.color + '18' }]}>
+                  <Text style={[styles.typeTagText, { color: item.color }]}>{item.kind}</Text>
+                </View>
+              </View>
+              <Text style={[styles.hubDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+              <View style={[styles.xpPill, { backgroundColor: item.color + '15', alignSelf: 'flex-start', marginTop: 6 }]}>
+                <Ionicons name="star" size={12} color={item.color} />
+                <Text style={[styles.xpPillText, { color: item.color }]}>+{Math.max(0, item.xp)} XP</Text>
+              </View>
+            </View>
+            {item.completed ? (
+              <View style={[styles.completedBadge, { backgroundColor: colors.success + '18' }]}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Text style={[styles.completedText, { color: colors.success }]}>Done</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.joinBtn, { backgroundColor: colors.primary }]}
+                onPress={() => navigation.navigate('SULTI', { situation: item.scenario || item.title, label: item.title })}
+              >
+                <Text style={styles.joinBtnText}>Start</Text>
+              </TouchableOpacity>
+            )}
+          </Card>
+        )}
+      />
+    );
+  };
+
+  const renderLeaderboard = () => {
+    if (lbLoading && leaderboard.length === 0) return <LoadingState fullScreen />;
+    if (lbError && leaderboard.length === 0) {
+      return (
+        <View style={styles.list}>
+          <ErrorState
+            icon="podium-outline"
+            title="Could not load the leaderboard"
+            message="Check your connection and try again."
+            actionLabel="Retry"
+            onAction={() => loadLeaderboard(lbPeriod)}
+          />
+        </View>
+      );
+    }
+    const rank = myRank?.rank || leaderboard.length + 1;
+    const rankXp = myRank?.xp ?? xp;
+    return (
+      <FlatList
+        data={leaderboard}
+        keyExtractor={(item, index) => `${item.id || item.name || index}`}
+        contentContainerStyle={styles.list}
+        {...scrollProps}
+        ListHeaderComponent={
+          <Card style={styles.yourRankCard}>
+            <View style={styles.yourRankHeader}>
+              <Ionicons name="ribbon" size={20} color={colors.accent} />
+              <Text style={[styles.yourRankLabel, { color: colors.textSecondary }]}>YOUR RANK</Text>
+            </View>
+            <View style={styles.yourRankRow}>
+              <View style={[styles.yourRankBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.yourRankNum}>#{rank}</Text>
+              </View>
+              <View style={styles.yourRankStats}>
+                <Text style={[styles.yourRankXp, { color: colors.text }]}>{rankXp.toLocaleString()} XP</Text>
+                <Text style={[styles.yourRankLevel, { color: colors.textSecondary }]}>
+                  Level {levelInfo.level} · {levelInfo.label}
+                </Text>
+              </View>
+              <View style={styles.yourRankStreak}>
+                <Ionicons name="flame" size={16} color={colors.warning} />
+                <Text style={[styles.yourRankStreakText, { color: colors.textSecondary }]}>{Math.max(0, Number(streak) || 0)}</Text>
+              </View>
+            </View>
+          </Card>
+        }
+        ListEmptyComponent={
+          <EmptyState icon="podium-outline" title="No rankings yet" message="Earn XP to climb the leaderboard!" />
+        }
+        renderItem={({ item, index }) => {
+          const r = Number(item.rank) || index + 1;
+          const xpVal = Math.max(0, Number(item.xp) || 0);
+          const streakVal = Math.max(0, Number(item.streak) || 0);
+          const lvl = getLevel(xpVal).level;
+          return (
+            <Card style={[styles.hubCard, r === 1 && { borderColor: colors.accent + '50' }]}>
+              <View style={[styles.rankBadge, r === 1 && { backgroundColor: colors.accent }]}>
+                <Text style={[styles.rankText, r === 1 && { color: '#fff' }]}>{r}</Text>
+              </View>
+              <Avatar name={item.name} size={36} />
+              <View style={styles.hubInfo}>
+                <Text style={[styles.hubTitle, { color: colors.text }]}>{item.name || 'Anonymous'}</Text>
+                <View style={styles.eventRow}>
+                  <Ionicons name="flame" size={12} color={colors.warning} />
+                  <Text style={[styles.eventText, { color: colors.textSecondary }]}>{streakVal} day streak · Lv. {lvl}</Text>
+                </View>
+              </View>
+              <Text style={[styles.xpValue, { color: colors.primary }]}>{xpVal.toLocaleString()} XP</Text>
+            </Card>
+          );
+        }}
+      />
+    );
+  };
+
+  const renderMe = () => {
+    const completedChallenges = [...challengeData, ...weeklyChallenge].filter((c) => c.completed).length;
+    const tabs = [
+      { key: 'notifications', label: 'Notifications', icon: 'notifications', count: unread },
+      { key: 'saved', label: 'Saved Posts', icon: 'bookmark', count: savedPosts.length },
+      { key: 'activity', label: 'My Activity', icon: 'time', count: myActivity.length },
+    ];
+    const stats = [
+      { label: 'Rank', value: myRank ? `#${myRank.rank}` : '—' },
+      { label: 'Level', value: String(levelInfo.level) },
+      { label: 'Posts', value: String(myActivity.length) },
+      { label: 'Badges', value: String(badges?.length || 0) },
+    ];
+    return (
+      <FlatList
+        data={tabs}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={styles.list}
+        {...scrollProps}
+        ListHeaderComponent={
+          <>
+            <Card style={styles.profileCard}>
+              <Avatar name={user?.fullname || 'You'} size={56} />
+              <View style={styles.profileInfo}>
+                <Text style={[styles.profileName, { color: colors.text }]}>{user?.fullname || 'Welcome, Learner!'}</Text>
+                <Text style={[styles.profileBio, { color: colors.textSecondary }]}>
+                  {user?.native_language || 'Bisaya (Cebuano)'} learner · {Math.max(0, Number(streak) || 0)} day streak
+                </Text>
+              </View>
+            </Card>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsRow}>
+                {stats.map((s, i) => (
+                  <View key={s.label} style={[styles.stat, i < stats.length - 1 && { borderRightWidth: 1, borderRightColor: colors.border }]}>
+                    <Text style={[styles.statValue, { color: colors.primary }]}>{s.value}</Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{s.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={[styles.meStatsDivider, { borderTopColor: colors.border }]}>
+                <View style={styles.meStatRow}>
+                  <Ionicons name="star" size={14} color={colors.accent} />
+                  <Text style={[styles.meStatText, { color: colors.textSecondary }]}>
+                    {xp.toLocaleString()} XP · {levelInfo.label} ({levelInfo.progress.toFixed(0)}% to next)
+                  </Text>
+                </View>
+                <View style={styles.meStatRow}>
+                  <Ionicons name="trophy" size={14} color={colors.warning} />
+                  <Text style={[styles.meStatText, { color: colors.textSecondary }]}>
+                    {completedChallenges} challenges completed
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </>
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity style={[styles.meRow, { borderBottomColor: colors.border }]} onPress={() => {
+            if (item.key === 'notifications') {
+              setShowNotifications(true);
+            } else if (item.key === 'saved') {
+              if (savedPosts.length === 0) {
+                Alert.alert('No saved posts', 'Tap the bookmark icon on any post to save it for later.');
+              } else {
+                Alert.alert('Saved Posts', savedPosts.map((p) => p.native).join('\n\n'));
+              }
+            } else {
+              if (myActivity.length === 0) {
+                Alert.alert('No activity yet', 'Your questions and shared posts will appear here.');
+              } else {
+                Alert.alert('My Activity', myActivity.map((p) => p.native).join('\n\n'));
+              }
+            }
+          }} activeOpacity={0.8}>
+            <View style={[styles.meIcon, { backgroundColor: colors.primary + '12' }]}>
+              <Ionicons name={item.icon} size={20} color={colors.primary} />
+            </View>
+            <Text style={[styles.meLabel, { color: colors.text }]}>{item.label}</Text>
+            {item.count > 0 && <Badge title={String(item.count)} variant="primary" size="sm" />}
+            <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+          </TouchableOpacity>
+        )}
+      />
+    );
+  };
+
+  const renderSearch = () => {
+    const { posts: sp, phrases, culture, experts } = searchResults;
+    const groups = [
+      { key: 'posts', title: 'Posts', icon: 'newspaper', color: colors.primary, data: sp, render: (d) => (
+        <PostCard
+          post={d}
+          liked={!!liked[d.id]}
+          saved={!!bookmarked[d.id]}
+          translated={!!translated[d.id]}
+          expanded={expandedPost === d.id}
+          comments={comments[d.id] || []}
+          onToggleComments={toggleComments}
+          onAddComment={handleAddComment}
+          onToggleLike={handleToggleLike}
+          onToggleSave={handleToggleSave}
+          onToggleTranslate={(id) => setTranslated((prev) => ({ ...prev, [id]: !prev[id] }))}
+          onMarkHelpful={handleMarkHelpful}
+          onReport={handleReport}
+        />
+      ) },
+      { key: 'phrases', title: 'Phrases', icon: 'chatbubble', color: '#8B5CF6', data: phrases, render: (d) => (
+        <Card style={styles.discoverCard}>
+          <View style={[styles.discoverIcon, { backgroundColor: d.color + '20' }]}>
+            <Ionicons name="chatbubble" size={20} color={d.color} />
+          </View>
+          <View style={styles.discoverInfo}>
+            <Text style={[styles.discoverName, { color: colors.text }]}>{d.native}</Text>
+            <Text style={[styles.discoverDesc, { color: colors.textSecondary }]}>{d.english}</Text>
+          </View>
+        </Card>
+      ) },
+      { key: 'culture', title: 'Culture', icon: 'color-palette', color: '#EC4899', data: culture, render: (d) => (
+        <Card style={styles.discoverCard}>
+          <View style={[styles.discoverIcon, { backgroundColor: d.color + '20' }]}>
+            <Ionicons name={d.icon} size={20} color={d.color} />
+          </View>
+          <View style={styles.discoverInfo}>
+            <Text style={[styles.discoverName, { color: colors.text }]}>{d.title}</Text>
+            <Text style={[styles.discoverDesc, { color: colors.textSecondary }]}>{d.text}</Text>
+          </View>
+        </Card>
+      ) },
+      { key: 'experts', title: 'Native Speakers', icon: 'shield-checkmark', color: '#14B8A6', data: experts, render: (d) => (
+        <Card style={styles.discoverCard}>
+          <Avatar name={d.name} size={36} />
+          <View style={styles.discoverInfo}>
+            <Text style={[styles.discoverName, { color: colors.text }]}>{d.name}</Text>
+            <Text style={[styles.discoverDesc, { color: colors.textSecondary }]}>{d.bio}</Text>
+          </View>
+        </Card>
+      ) },
+    ].filter((g) => g.data.length > 0);
+
+    if (groups.length === 0) {
+      return (
+        <View style={styles.list}>
+          <EmptyState icon="search" title="No results" message={`Nothing found for "${query}". Try a different word.`} />
+        </View>
+      );
+    }
+    return (
+      <FlatList
+        data={groups}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={styles.list}
+        {...scrollProps}
+        renderItem={({ item }) => (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name={item.icon} size={16} color={item.color} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{item.title} ({item.data.length})</Text>
+            </View>
+            {item.data.map((d) => <View key={d.id}>{item.render(d)}</View>)}
+          </View>
+        )}
+      />
+    );
+  };
+
+  const renderNotificationsSheet = () => (
+    <BottomSheet visible={showNotifications} onClose={() => setShowNotifications(false)} title="Notifications" height={480} bottomInset={96}>
+      {notifications.length === 0 ? (
+        <View style={styles.sheetEmpty}>
+          <Ionicons name="notifications-off-outline" size={28} color={colors.textLight} />
+          <Text style={[styles.sheetEmptyText, { color: colors.textSecondary }]}>No notifications yet.</Text>
+        </View>
+      ) : (
+        notifications.map((n) => (
+          <TouchableOpacity
+            key={n.id}
+            style={[styles.notifRow, !n.read && { backgroundColor: colors.primary + '08' }]}
+            onPress={() => setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.notifIcon, { backgroundColor: (n.read ? colors.surfaceSecondary : colors.primary) + '18' }]}>
+              <Ionicons name={n.icon || 'notifications'} size={18} color={n.read ? colors.textSecondary : colors.primary} />
+            </View>
+            <View style={styles.notifBody}>
+              <Text style={[styles.notifTitle, { color: colors.text }]}>{n.title}</Text>
+              <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>{n.body}</Text>
+              <Text style={[styles.notifTime, { color: colors.textLight }]}>{n.time}</Text>
+            </View>
+            {!n.read && <View style={[styles.notifDot, { backgroundColor: colors.primary }]} />}
+          </TouchableOpacity>
+        ))
       )}
-    />
+    </BottomSheet>
   );
 
   const renderTab = () => {
     switch (activeTab) {
+      case 'discover': return renderDiscover();
       case 'challenges': return renderChallenges();
-      case 'ask': return renderAsk();
-      case 'phrases': return renderPhrases();
-      case 'culture': return renderCulture();
-      case 'events': return renderEvents();
-      case 'discussions': return renderDiscussions();
       case 'leaderboard': return renderLeaderboard();
+      case 'me': return renderMe();
+      case 'feed':
       default: return renderFeed();
     }
   };
@@ -586,139 +1136,230 @@ export default function CommunityScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Community" subtitle="Learn together">
-        <TouchableOpacity onPress={activeTab === 'ask' ? () => setShowAskSheet(true) : openCreateSheet} style={styles.headerBtn}>
-          <View style={[styles.headerBtnInner, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-            <Ionicons name="add" size={24} color="#fff" />
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: padTop }]}
+      >
+        <View style={styles.headerRow}>
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>Community</Text>
+            <Animated.View style={{ opacity: subtitleOpacity }}>
+              <Text style={styles.headerSubtitle}>Practice Bisaya. Share knowledge. Learn together.</Text>
+            </Animated.View>
           </View>
-        </TouchableOpacity>
-      </Header>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => setShowNotifications(true)}
+              style={styles.iconBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={22} color="#fff" />
+              {unread > 0 && (
+                <View style={[styles.unreadDot, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.unreadText}>{unread > 9 ? '9+' : unread}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {canPost && (
+              <TouchableOpacity
+                onPress={() => openCreate()}
+                style={[styles.iconBtn, styles.createBtn, { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Create a post"
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+        <Animated.View style={[styles.searchWrap, { opacity: searchOpacity, transform: [{ translateY: searchTranslate }] }]}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={16} color="rgba(255,255,255,0.85)" />
+            <TextInput
+              id="communitySearch"
+              name="communitySearch"
+              testID="communitySearch-input"
+              style={styles.searchInput}
+              placeholder="Search posts, phrases, questions..."
+              placeholderTextColor="rgba(255,255,255,0.8)"
+              value={query}
+              onChangeText={setQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoComplete="off"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity onPress={() => setQuery('')} style={styles.searchClear} accessibilityRole="button" accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.85)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+      </LinearGradient>
 
-      {renderSegments()}
-      {renderTab()}
+      {renderTabs()}
+      {activeTab === 'leaderboard' && renderPeriodFilters()}
 
-      <BottomSheet visible={showCreate} onClose={() => setShowCreate(false)} title="Create Post" height={360}>
-        <TextInput
-          id="postTitle"
-          name="postTitle"
-          testID="postTitle-input"
-          style={[styles.sheetInput, { color: colors.text, borderColor: isDark ? '#334155' : colors.border, backgroundColor: isDark ? colors.surface : colors.surfaceSecondary }]}
-          placeholder='Title (e.g. "How to use Lagi?")'
-          placeholderTextColor={colors.textLight}
-          value={newTitle}
-          onChangeText={setNewTitle}
-          autoComplete="off"
-        />
-        <TextInput
-          id="postContent"
-          name="postContent"
-          testID="postContent-input"
-          style={[styles.sheetInput, styles.sheetBody, { color: colors.text, borderColor: isDark ? '#334155' : colors.border, backgroundColor: isDark ? colors.surface : colors.surfaceSecondary }]}
-          placeholder="Write your post or ask a question..."
-          placeholderTextColor={colors.textLight}
-          value={newContent}
-          onChangeText={setNewContent}
-          multiline
-        />
-        <TouchableOpacity style={[styles.sheetSubmit, { backgroundColor: colors.primary }]} onPress={handleCreatePost} activeOpacity={0.8}>
-          <Ionicons name="paper-plane" size={18} color="#fff" />
-          <Text style={styles.sheetSubmitText}>Share with Community</Text>
-        </TouchableOpacity>
-      </BottomSheet>
+      {searching ? renderSearch() : renderTab()}
 
-      <BottomSheet visible={showAskSheet} onClose={() => setShowAskSheet(false)} title="Ask a Native Speaker" height={360}>
-        <Text style={[styles.askHint, { color: colors.textSecondary }]}>Type your question, or record it in Bisaya for native speakers to answer.</Text>
-        <TextInput
-          id="askText"
-          name="askText"
-          testID="ask-input"
-          style={[styles.sheetInput, styles.sheetBody, { color: colors.text, borderColor: isDark ? '#334155' : colors.border, backgroundColor: isDark ? colors.surface : colors.surfaceSecondary }]}
-          placeholder="Type your question..."
-          placeholderTextColor={colors.textLight}
-          value={askText}
-          onChangeText={setAskText}
-          multiline
-        />
-        <TouchableOpacity
-          style={[styles.recordRow, { borderColor: colors.border }]}
-          onPress={() => setIsRecording((r) => !r)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name={isRecording ? 'stop-circle' : 'mic'} size={22} color={isRecording ? colors.error : colors.primary} />
-          <Text style={[styles.recordText, { color: isRecording ? colors.error : colors.textSecondary }]}>
-            {isRecording ? 'Recording... tap to stop' : 'Record a voice question'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.sheetSubmit, { backgroundColor: colors.primary }]} onPress={submitQuestion} activeOpacity={0.8}>
-          <Ionicons name="help-circle" size={18} color="#fff" />
-          <Text style={styles.sheetSubmitText}>Post Question</Text>
-        </TouchableOpacity>
-      </BottomSheet>
+      <CreatePostSheet
+        visible={showCreate}
+        initialType={createType}
+        onClose={() => setShowCreate(false)}
+        onSubmit={handleCreatePost}
+      />
+      {renderNotificationsSheet()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBtn: { padding: spacing.sm },
-  headerBtnInner: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  segmentBar: { borderBottomWidth: 1, paddingVertical: spacing.sm },
-  segmentRow: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.xl, gap: spacing.sm },
-  segmentChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
-  segmentText: { fontSize: 12, fontWeight: '700' },
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 48 },
+  headerText: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 3, lineHeight: 18 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  iconBtn: { padding: spacing.sm, position: 'relative' },
+  createBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', padding: 0 },
+  unreadDot: { position: 'absolute', top: 2, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  unreadText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+  searchWrap: { marginTop: spacing.md },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  searchInput: { flex: 1, color: '#fff', fontSize: 14, paddingVertical: 0 },
+  searchClear: { padding: 2 },
+  tabBar: { borderBottomWidth: 1 },
+  tabRow: { paddingHorizontal: spacing.xl, gap: spacing.sm, paddingVertical: spacing.sm },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, position: 'relative' },
+  tabText: { fontSize: 13, fontWeight: '700' },
+  tabIndicator: { position: 'absolute', bottom: 2, alignSelf: 'center', width: 18, height: 3, borderRadius: 2 },
+  periodBar: { borderBottomWidth: 1 },
+  periodRow: { paddingHorizontal: spacing.xl, gap: spacing.sm, paddingVertical: spacing.sm },
+  periodChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
+  periodChipText: { fontSize: 12, fontWeight: '700' },
   list: { padding: spacing.xl, paddingTop: spacing.lg },
-  postCard: { marginBottom: spacing.md },
-  postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
-  postAuthor: { flex: 1, marginLeft: spacing.md },
-  authorName: { fontSize: 14, fontWeight: '600' },
-  postDate: { fontSize: 11, marginTop: 2 },
-  postTitle: { fontSize: 17, fontWeight: '700', marginBottom: spacing.sm },
-  postContent: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
-  translateTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: borderRadius.full, marginBottom: spacing.sm },
-  translateTagText: { fontSize: 11, fontWeight: '700' },
-  postActions: { flexDirection: 'row', gap: spacing.lg, flexWrap: 'wrap' },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  actionText: { fontSize: 12, fontWeight: '500' },
-  commentsSection: { marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1 },
-  commentRow: { flexDirection: 'row', marginBottom: spacing.md, gap: spacing.sm },
-  commentContent: { flex: 1 },
-  commentAuthor: { fontSize: 13, fontWeight: '600' },
-  commentText: { fontSize: 13, marginTop: 2, lineHeight: 18 },
-  commentInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  commentInput: { flex: 1, borderWidth: 1.5, borderRadius: borderRadius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 13 },
+  sampleBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md },
+  sampleBannerText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  filterRow: { marginBottom: spacing.sm },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, marginRight: spacing.sm },
+  filterChipText: { fontSize: 12, fontWeight: '700' },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1.5, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full, marginRight: spacing.sm },
+  typeChipText: { fontSize: 12, fontWeight: '700' },
+  hintCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  hintText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  metricsCard: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  metric: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  metricIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  metricInfo: { flex: 1 },
+  metricValue: { fontSize: 15, fontWeight: '800' },
+  metricLabel: { fontSize: 10, fontWeight: '600', marginTop: 1 },
+  metricDivider: { width: 1, height: 24, marginHorizontal: spacing.sm },
+  emptyInvite: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg },
+  emptyInviteIcon: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl },
+  emptyInviteTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: spacing.sm },
+  emptyInviteMessage: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: spacing.xl, paddingHorizontal: spacing.lg },
+  emptyInviteActions: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap', justifyContent: 'center' },
+  emptyInviteBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: borderRadius.full },
+  emptyInviteBtnOutline: { borderWidth: 1.5, backgroundColor: 'transparent' },
+  emptyInviteBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  section: { marginBottom: spacing.lg },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  sectionTitle: { fontSize: 15, fontWeight: '800' },
+  discoverCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  discoverIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  discoverInfo: { flex: 1 },
+  discoverNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
+  discoverName: { fontSize: 14, fontWeight: '700' },
+  discoverDesc: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  discoverMeta: { fontSize: 11, marginTop: 3 },
+  followBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full },
+  followBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  learnBtn: { padding: spacing.sm },
+  sectionTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionSubtitle: { fontSize: 11, fontWeight: '500', marginTop: 1 },
+  viewAllText: { fontSize: 12, fontWeight: '700' },
+  discoverMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  discoverActions: { alignItems: 'flex-end', gap: spacing.sm },
+  askBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.full },
+  askBtnText: { fontSize: 11, fontWeight: '700' },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: borderRadius.full, marginTop: 6 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontWeight: '700' },
+  phraseCard: { marginBottom: spacing.sm },
+  phraseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  phraseNative: { fontSize: 16, fontWeight: '800' },
+  phraseNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderRadius: borderRadius.md, padding: spacing.sm, marginTop: spacing.sm },
+  phraseNoteText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  phraseActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md, borderTopWidth: 1, borderTopColor: 'transparent' },
+  phraseAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  phraseActionText: { fontSize: 12, fontWeight: '700' },
+  eventCard: { marginBottom: spacing.sm },
+  eventHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  eventIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  eventDetails: { gap: spacing.xs, marginBottom: spacing.md },
+  eventActions: { flexDirection: 'row', gap: spacing.sm },
+  remindBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full },
+  remindBtnText: { fontSize: 12, fontWeight: '700' },
+  backTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1.5, borderRadius: borderRadius.full, paddingVertical: spacing.md, marginTop: spacing.lg, marginBottom: spacing.lg },
+  backTopText: { fontSize: 13, fontWeight: '700' },
+  streakCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1, marginBottom: spacing.md, marginTop: spacing.sm },
   hubCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
-  hubIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   hubInfo: { flex: 1 },
   hubTitle: { fontSize: 15, fontWeight: '700' },
   hubDesc: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  hubIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   xpPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: borderRadius.full },
   xpPillText: { fontSize: 11, fontWeight: '700' },
-  askComposer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.xl, marginBottom: spacing.lg },
-  askComposerText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  voiceAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  voiceTag: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  voiceTagText: { fontSize: 10, fontWeight: '600' },
-  askText: { fontSize: 15, fontWeight: '700', marginBottom: spacing.xs },
-  phraseIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  phraseNative: { fontSize: 16, fontWeight: '800' },
-  phraseUser: { fontSize: 11, marginTop: 3 },
-  actionCol: { alignItems: 'flex-end' },
+  typeTag: { marginLeft: spacing.xs, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.full },
+  typeTagText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: borderRadius.full },
+  completedText: { fontSize: 12, fontWeight: '700' },
+  rankBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rankText: { fontSize: 13, fontWeight: '800' },
+  xpValue: { fontSize: 13, fontWeight: '800' },
+  yourRankCard: { marginBottom: spacing.md },
+  yourRankHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  yourRankLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  yourRankRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  yourRankBadge: { minWidth: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  yourRankNum: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  yourRankStats: { flex: 1 },
+  yourRankXp: { fontSize: 18, fontWeight: '800' },
+  yourRankLevel: { fontSize: 12, marginTop: 2 },
+  yourRankStreak: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  yourRankStreakText: { fontSize: 14, fontWeight: '800' },
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+  profileInfo: { flex: 1 },
+  profileName: { fontSize: 18, fontWeight: '800' },
+  profileBio: { fontSize: 12, marginTop: 3 },
+  statsCard: { marginBottom: spacing.md },
+  statsRow: { flexDirection: 'row' },
+  stat: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm },
+  statValue: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  meStatsDivider: { borderTopWidth: 1, paddingTop: spacing.sm, gap: spacing.xs },
+  meStatRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  meStatText: { fontSize: 12, fontWeight: '600' },
+  meRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1 },
+  meIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  meLabel: { flex: 1, fontSize: 14, fontWeight: '700' },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 3 },
   eventText: { fontSize: 12 },
   joinBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.full },
   joinBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  repliesPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: borderRadius.full },
-  repliesText: { fontSize: 12, fontWeight: '600' },
-  rankBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  rankText: { fontSize: 13, fontWeight: '800' },
-  xpValue: { fontSize: 13, fontWeight: '800' },
-  sampleBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md },
-  sampleBannerText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 17 },
-  sheetInput: { borderWidth: 1.5, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md, fontSize: 15 },
-  sheetBody: { minHeight: 100, textAlignVertical: 'top' },
-  sheetSubmit: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: borderRadius.lg, paddingVertical: 14, gap: spacing.sm, marginTop: spacing.sm, ...shadows.md },
-  sheetSubmitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  askHint: { fontSize: 12, marginBottom: spacing.md, lineHeight: 17 },
-  recordRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1.5, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.md },
-  recordText: { fontSize: 14, fontWeight: '600' },
+  sheetEmpty: { alignItems: 'center', paddingVertical: spacing.xxl, gap: spacing.sm },
+  sheetEmptyText: { fontSize: 13, fontWeight: '600' },
+  notifRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: borderRadius.md, marginBottom: spacing.xs },
+  notifIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  notifBody: { flex: 1 },
+  notifTitle: { fontSize: 13, fontWeight: '700' },
+  notifDesc: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  notifTime: { fontSize: 11, marginTop: 3 },
+  notifDot: { width: 8, height: 8, borderRadius: 4 },
 });

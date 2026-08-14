@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
 } from 'react-native';
@@ -9,8 +9,7 @@ import Animated, {
   FadeInRight, Easing, interpolate,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
-import { XP_VALUES } from '../constants';
-import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
 import { SafeUserStats } from '../utils/formatters';
@@ -18,9 +17,9 @@ import { api } from '../services/api';
 import { offline } from '../services/offline';
 import { hapticTap } from '../utils/haptics';
 import ModuleCard from '../components/learning/ModuleCard';
-// eslint-disable-next-line import/no-named-as-default
 import DailyChallengeCard from '../components/learning/DailyChallengeCard';
 import AIRecommendationCard from '../components/learning/AIRecommendationCard';
+import GlassCard from '../components/GlassCard';
 import AuroraBackground from '../components/AuroraBackground';
 import { spacing, borderRadius, shadows } from '../theme';
 
@@ -44,8 +43,6 @@ const MODULES = [
     iconName: 'mic',
     gradient: ['#14B8A6', '#0D9488'],
     route: 'VoiceMode',
-    progress: 65,
-    count: 'Speak',
   },
   {
     id: 'scenario_practice',
@@ -54,8 +51,6 @@ const MODULES = [
     iconName: 'chatbubbles',
     gradient: ['#3B82F6', '#2563EB'],
     route: 'ScenarioPractice',
-    progress: 40,
-    count: 'Scenarios',
   },
   {
     id: 'phrasebook',
@@ -64,8 +59,6 @@ const MODULES = [
     iconName: 'book',
     gradient: ['#8B5CF6', '#7C3AED'],
     route: 'Phrasebook',
-    progress: 55,
-    count: 'Phrases',
   },
   {
     id: 'flashcards',
@@ -74,8 +67,6 @@ const MODULES = [
     iconName: 'layers',
     gradient: ['#F59E0B', '#F97316'],
     route: 'Flashcards',
-    progress: 48,
-    count: 'Cards',
   },
   {
     id: 'pronunciation_lab',
@@ -84,8 +75,6 @@ const MODULES = [
     iconName: 'mic-circle',
     gradient: ['#EC4899', '#DB2777'],
     route: 'Pronunciation',
-    progress: 92,
-    count: '92% avg',
   },
   {
     id: 'grammar',
@@ -94,8 +83,6 @@ const MODULES = [
     iconName: 'school',
     gradient: ['#6366F1', '#4F46E5'],
     route: 'Grammar',
-    progress: 35,
-    count: 'Rules',
   },
   {
     id: 'vocabulary_notebook',
@@ -104,8 +91,6 @@ const MODULES = [
     iconName: 'bookmark',
     gradient: ['#10B981', '#059669'],
     route: 'VocabularyReview',
-    progress: 60,
-    count: 'Words',
   },
   {
     id: 'listening',
@@ -114,8 +99,6 @@ const MODULES = [
     iconName: 'ear',
     gradient: ['#F97316', '#EA580C'],
     route: 'Listening',
-    progress: 42,
-    count: 'Listen',
   },
   {
     id: 'writing',
@@ -124,8 +107,6 @@ const MODULES = [
     iconName: 'create',
     gradient: ['#EC4899', '#DB2777'],
     route: 'Writing',
-    progress: 28,
-    count: 'Prompts',
   },
   {
     id: 'reading',
@@ -134,8 +115,6 @@ const MODULES = [
     iconName: 'book-outline',
     gradient: ['#06B6D4', '#0891B2'],
     route: 'Reading',
-    progress: 33,
-    count: 'Stories',
   },
   {
     id: 'sulti_switch',
@@ -144,8 +123,6 @@ const MODULES = [
     iconName: 'swap-horizontal',
     gradient: ['#0EA5E9', '#0284C7'],
     route: 'SultiSwitch',
-    progress: 25,
-    count: 'Switch',
   },
   {
     id: 'culture_notes',
@@ -154,8 +131,6 @@ const MODULES = [
     iconName: 'compass',
     gradient: ['#10B981', '#059669'],
     route: 'CultureNotes',
-    progress: 20,
-    count: 'Facts',
   },
   {
     id: 'review_center',
@@ -164,61 +139,82 @@ const MODULES = [
     iconName: 'refresh',
     gradient: ['#F43F5E', '#E11D48'],
     route: 'ReviewCenter',
-    progress: 50,
-    count: 'Quiz',
     badge: 'NEW',
     badgeColor: '#F43F5E',
   },
 ];
 
 const CATEGORIES = [
-  { name: 'Market', icon: 'storefront', count: 12, color: '#14B8A6' },
-  { name: 'Transportation', icon: 'bus', count: 8, color: '#3B82F6' },
-  { name: 'Restaurant', icon: 'restaurant', count: 10, color: '#F59E0B' },
-  { name: 'Hospital', icon: 'medkit', count: 5, color: '#EF4444' },
-  { name: 'School', icon: 'school', count: 7, color: '#8B5CF6' },
-  { name: 'Workplace', icon: 'briefcase', count: 6, color: '#6366F1' },
-  { name: 'Hotel', icon: 'bed', count: 4, color: '#06B6D4' },
-  { name: 'Emergency', icon: 'warning', count: 3, color: '#FF6B6B' },
-  { name: 'Community', icon: 'home', count: 9, color: '#10B981' },
-  { name: 'Small Talk', icon: 'chatbubble-ellipses', count: 11, color: '#EC4899' },
-  { name: 'Dating', icon: 'heart', count: 3, color: '#F43F5E' },
-  { name: 'Festivals', icon: 'gift', count: 6, color: '#8B5CF6' },
+  { name: 'Market', icon: 'storefront', color: '#14B8A6' },
+  { name: 'Transportation', icon: 'bus', color: '#3B82F6' },
+  { name: 'Restaurant', icon: 'restaurant', color: '#F59E0B' },
+  { name: 'Hospital', icon: 'medkit', color: '#EF4444' },
+  { name: 'School', icon: 'school', color: '#8B5CF6' },
+  { name: 'Workplace', icon: 'briefcase', color: '#6366F1' },
+  { name: 'Hotel', icon: 'bed', color: '#06B6D4' },
+  { name: 'Emergency', icon: 'warning', color: '#FF6B6B' },
+  { name: 'Community', icon: 'home', color: '#10B981' },
+  { name: 'Small Talk', icon: 'chatbubble-ellipses', color: '#EC4899' },
+  { name: 'Dating', icon: 'heart', color: '#F43F5E' },
+  { name: 'Festivals', icon: 'gift', color: '#8B5CF6' },
 ];
+
+const FOCUS_REFRESH_MS = 4000;
 
 function getDailyQuote() {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
   return QUOTES[dayOfYear % QUOTES.length];
 }
 
-function CircularProgress({ progress, size = 64, strokeWidth = 5, color, label, value, delay = 0 }) {
+function CircularProgress({ progress, size = 64, strokeWidth = 5, color, label, value, delay = 0, empty = false, onPress }) {
   const { colors } = useTheme();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progressValue = useSharedValue(0);
 
   useEffect(() => {
-    progressValue.value = withDelay(delay, withTiming(Math.max(0.05, progress / 100), { duration: 1000 }));
+    progressValue.value = withDelay(delay, withTiming(empty ? 0 : Math.max(0.05, progress / 100), { duration: 1000 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progress]);
+  }, [progress, empty]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDasharray: `${circumference * progressValue.value} ${circumference}`,
   }));
 
-  return (
-    <View style={styles.progressRing}>
+  const ring = (
+    <>
       <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={radius} stroke={colors.border} strokeWidth={strokeWidth} fill="none" />
         <AnimatedCircle cx={size / 2} cy={size / 2} r={radius} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" animatedProps={animatedProps} />
       </Svg>
-      <Text style={[styles.progressRingValue, { color: colors.text }]}>{value}</Text>
+      {empty ? (
+        <View style={[styles.ringCta, { backgroundColor: color + '20', borderColor: color + '40' }]}>
+          <Ionicons name="mic" size={10} color={color} />
+          <Text style={[styles.ringCtaText, { color }]}>Start</Text>
+        </View>
+      ) : (
+        <Text style={[styles.progressRingValue, { color: colors.text }]}>{value}</Text>
+      )}
+    </>
+  );
+
+  return (
+    <TouchableOpacity
+      style={styles.progressRing}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.7}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={empty ? 'Start pronunciation practice' : `${label}: ${value}`}
+    >
+      {ring}
       <Text style={[styles.progressRingLabel, { color: colors.textSecondary }]}>{label}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 function ShimmerBar({ progress, color }) {
+  const { colors, isDark } = useTheme();
   const shimmer = useSharedValue(0);
   const barWidth = (SCREEN_WIDTH - 80) / 3;
 
@@ -236,10 +232,10 @@ function ShimmerBar({ progress, color }) {
   }));
 
   return (
-    <View style={[styles.shimmerTrack, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-      <View style={[styles.shimmerFill, { width: `${progress}%`, backgroundColor: 'rgba(255,255,255,0.9)' }]} />
+    <View style={[styles.shimmerTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : colors.border }]}>
+      <View style={[styles.shimmerFill, { width: `${progress}%`, backgroundColor: color || colors.accent }]} />
       {progress > 0 && progress < 100 && (
-        <Animated.View style={[styles.shimmerOverlay, { width: '30%', backgroundColor: color || '#fff' }, shimmerStyle]} />
+        <Animated.View style={[styles.shimmerOverlay, { width: '30%', backgroundColor: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.6)' }, shimmerStyle]} />
       )}
     </View>
   );
@@ -247,13 +243,21 @@ function ShimmerBar({ progress, color }) {
 
 export default function LearnScreen({ navigation }) {
   const { colors, isDark } = useTheme();
-  const { xp, dailyXp, streak, dailyGoal, addXp, user } = useGame();
-  const { enqueueAction } = useOfflineSync();
+  const { xp, dailyXp, streak, dailyGoal, user } = useGame();
   const [wordsLearned, setWordsLearned] = useState(0);
-  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
-  const [notifCount] = useState(3);
+  const [notifCount, setNotifCount] = useState(0);
+  const [weeklyXpTotal, setWeeklyXpTotal] = useState(0);
+  const [pronunciationStats, setPronunciationStats] = useState(null);
+  const [learningProgress, setLearningProgress] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const lastLoadRef = useRef(0);
 
   const quote = useMemo(() => getDailyQuote(), []);
+
+  const weeklyProgress = useMemo(() => {
+    const weeklyGoal = Math.max(1, (Number(dailyGoal) || 50) * 7);
+    return Math.min(Math.round((Math.max(0, weeklyXpTotal) / weeklyGoal) * 100), 100);
+  }, [weeklyXpTotal, dailyGoal]);
 
   const stats = useMemo(() => SafeUserStats({
     xp,
@@ -261,34 +265,81 @@ export default function LearnScreen({ navigation }) {
     dailyXp,
     wordsLearned,
     streakDays: streak,
-  }), [xp, dailyXp, dailyGoal, wordsLearned, streak]);
+    weeklyProgress,
+  }), [xp, dailyXp, dailyGoal, wordsLearned, streak, weeklyProgress]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cached = await offline.getCachedVocabulary();
-        if (!cancelled && Array.isArray(cached) && cached.length) setWordsLearned(cached.length);
-      } catch {}
-      try {
-        const data = await api.getSavedPhrases();
-        if (!cancelled && Array.isArray(data) && data.length) setWordsLearned(data.length);
-      } catch {}
-    })();
-    return () => { cancelled = true; };
+  const moduleProgressByTitle = useMemo(() => {
+    const map = {};
+    for (const row of learningProgress || []) {
+      if (row && row.moduleTitle) {
+        map[String(row.moduleTitle).trim().toLowerCase()] = Math.max(0, Math.min(100, Number(row.completionPercent) || 0));
+      }
+    }
+    return map;
+  }, [learningProgress]);
+
+  const continueModule = useMemo(() => {
+    let best = null;
+    for (const module of MODULES) {
+      const pct = moduleProgressByTitle[module.title.toLowerCase()];
+      if (pct !== undefined && pct > 0 && pct < 100) {
+        if (!best || pct > best.pct) best = { module, pct };
+      }
+    }
+    return best ? { ...best.module, pct: best.pct } : null;
+  }, [moduleProgressByTitle]);
+
+  const loadData = useCallback(async () => {
+    try {
+      const cached = await offline.getCachedVocabulary();
+      if (Array.isArray(cached) && cached.length) setWordsLearned(cached.length);
+    } catch {}
+    try {
+      const data = await api.getSavedPhrases();
+      if (Array.isArray(data) && data.length) setWordsLearned(data.length);
+    } catch {}
+    try {
+      const notifications = await api.getNotifications();
+      if (Array.isArray(notifications)) {
+        setNotifCount(notifications.filter((n) => n && !n.read).length);
+      }
+    } catch {}
+    try {
+      const weekly = await api.getWeeklyProgress();
+      if (Array.isArray(weekly) && weekly.length) {
+        setWeeklyXpTotal(weekly.reduce((sum, day) => sum + (Number(day && day.xp) || 0), 0));
+      }
+    } catch {}
+    try {
+      const pron = await api.getPronunciationStats();
+      if (pron) setPronunciationStats(pron);
+    } catch {
+      setPronunciationStats(null);
+    }
+    try {
+      const progress = await api.getLearningProgress();
+      if (Array.isArray(progress)) setLearningProgress(progress);
+    } catch {}
   }, []);
 
-  const handleVoiceSession = () => {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - lastLoadRef.current > FOCUS_REFRESH_MS) {
+        lastLoadRef.current = now;
+        loadData();
+      }
+      setRefreshKey((k) => k + 1);
+    }, [loadData])
+  );
+
+  const handleTalkToSulti = () => {
     hapticTap();
-    setVoiceSessionActive(true);
-    addXp(XP_VALUES.VOICE_PRACTICE_LEARN, 'voice_practice');
-    enqueueAction({
-      endpoint: '/api/game/stats',
-      method: 'PUT',
-      payload: { xp: (xp || 0) + XP_VALUES.VOICE_PRACTICE_LEARN },
-    });
     navigation.navigate('VoiceMode');
-    setTimeout(() => setVoiceSessionActive(false), 3000);
   };
 
   const handleModulePress = (module) => {
@@ -301,27 +352,42 @@ export default function LearnScreen({ navigation }) {
     navigation.navigate('Phrasebook', { category: category.name });
   };
 
-  const handleDailyChallengeStart = (challenge) => {
+  const handleDailyChallengeAction = (challenge, route, params, completed) => {
+    hapticTap();
+    if (completed) {
+      loadData();
+      return;
+    }
     if (challenge) {
-      navigation.navigate('SULTI', { situation: challenge.scenario, label: challenge.title });
+      navigation.navigate(route || 'SULTI', params || { situation: challenge.title, label: challenge.title });
+    } else {
+      navigation.navigate('SULTI');
     }
   };
 
   const handleAIRecommendation = (recommendation) => {
+    if (!recommendation) return;
     const moduleRoutes = {
-      phrasebook: 'Learn', daily_challenge: 'Tutor', pronunciation: 'Pronunciation',
-      ai_conversation: 'Tutor', flashcards: 'Flashcards', vocabulary: 'VocabularyReview', voice: 'VoiceMode',
+      phrasebook: 'Phrasebook',
+      daily_challenge: 'SULTI',
+      pronunciation: 'Pronunciation',
+      ai_conversation: 'SULTI',
+      flashcards: 'Flashcards',
+      vocabulary: 'VocabularyReview',
+      voice: 'VoiceMode',
+      scenario: 'ScenarioPractice',
     };
-    const route = moduleRoutes[recommendation.module] || 'Tutor';
-    const params = recommendation.module === 'daily_challenge'
-      ? { situation: 'Daily challenge practice', label: 'Daily Challenge' }
-      : recommendation.module === 'ai_conversation'
-        ? { situation: 'Roleplay conversation', label: 'AI Conversation' }
-        : {};
+    const route = recommendation.route || moduleRoutes[recommendation.module] || 'SULTI';
+    const params = route === 'SULTI'
+      ? { situation: recommendation.title, label: recommendation.title }
+      : {};
     navigation.navigate(route, params);
   };
 
   const userName = user?.name || user?.displayName || 'Learner';
+
+  const pronAttempts = Number(pronunciationStats?.totalAttempts) || 0;
+  const pronAvg = Math.max(0, Math.min(100, Number(pronunciationStats?.avgAccuracy) || 0));
 
   return (
     <AuroraBackground style={styles.container}>
@@ -338,7 +404,7 @@ export default function LearnScreen({ navigation }) {
           </View>
           <TouchableOpacity
             style={[styles.notifBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceSecondary }]}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() => navigation.navigate('Notifications')}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={notifCount > 0 ? `${notifCount} unread notifications` : 'Notifications'}
@@ -363,26 +429,61 @@ export default function LearnScreen({ navigation }) {
           </View>
         </Animated.View>
 
-        {/* Progress Rings */}
-        <Animated.View entering={FadeInRight.delay(200).duration(500)} style={styles.progressRow}>
-          <CircularProgress progress={stats.dailyProgress} color={colors.accent} label="TODAY" value={stats.targetDisplay} delay={300} />
-          <CircularProgress progress={stats.weeklyProgress} color={colors.warning} label="WEEKLY" value={`${stats.weeklyProgress}%`} delay={450} />
-          <CircularProgress progress={stats.pronunciationScore} color={colors.secondary} label="PRONUNCIATION" value={`${stats.pronunciationScore}%`} delay={600} />
-        </Animated.View>
-
-        {/* XP Shimmer Bar */}
-        <Animated.View entering={FadeInRight.delay(300).duration(500)} style={styles.shimmerSection}>
-          <View style={styles.shimmerHeader}>
-            <Text style={[styles.shimmerLabel, { color: isDark ? '#94A3B8' : '#64748B' }]}>Daily XP Progress</Text>
-            <Text style={[styles.shimmerValue, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>{stats.dailyProgress}%</Text>
+        {/* Today's Goal */}
+        <Animated.View entering={FadeInRight.delay(200).duration(500)} style={styles.goalSection}>
+          <View style={styles.goalHeader}>
+            <View>
+              <Text style={[styles.goalTitle, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>Today&apos;s Goal</Text>
+              <Text style={[styles.goalSubtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>Complete your goal to keep your progress moving</Text>
+            </View>
+            <View style={[styles.goalChip, { backgroundColor: colors.accent + '15' }]}>
+              <Ionicons name="flame" size={14} color={colors.accent} />
+              <Text style={[styles.goalChipText, { color: colors.accent }]}>{stats.streakCount} day{stats.streakCount === 1 ? '' : 's'}</Text>
+            </View>
+          </View>
+          <View style={styles.goalValueRow}>
+            <Text style={[styles.goalValue, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>{stats.targetDisplay}</Text>
+            <Text style={[styles.goalPercent, { color: colors.accent }]}>{stats.dailyProgress}% of today&apos;s goal</Text>
           </View>
           <ShimmerBar progress={stats.dailyProgress} color={isDark ? '#2DD4BF' : '#14B8A6'} />
         </Animated.View>
 
-        {/* Voice Practice + Daily Challenge - Stacked vertically to prevent overlap */}
-        <Animated.View entering={FadeInRight.delay(400).duration(500)} style={styles.cardsFeed}>
-          {/* Talk with SULTI Banner Card */}
-          <TouchableOpacity style={[styles.bannerCard, { backgroundColor: colors.primary }]} onPress={handleVoiceSession} activeOpacity={0.9}>
+        {/* Progress Summary */}
+        <Animated.View entering={FadeInRight.delay(300).duration(500)} style={styles.progressRow}>
+          <CircularProgress progress={stats.dailyProgress} color={colors.accent} label="TODAY" value={stats.targetDisplay} delay={350} />
+          <CircularProgress progress={stats.weeklyProgress} color={colors.warning} label="WEEKLY" value={`${stats.weeklyProgress}%`} delay={450} />
+          <CircularProgress
+            progress={pronAvg}
+            color={colors.secondary}
+            label="PRONUNCIATION"
+            value={pronAttempts > 0 ? `${Math.round(pronAvg)}%` : '—'}
+            delay={550}
+            empty={pronAttempts === 0}
+            onPress={() => navigation.navigate('Pronunciation')}
+          />
+        </Animated.View>
+
+        {/* Continue Learning */}
+        {continueModule && (
+          <Animated.View entering={FadeInRight.delay(400).duration(500)}>
+            <ContinueCard title={continueModule.title} pct={continueModule.pct} colors={colors} onPress={() => handleModulePress(continueModule)} />
+          </Animated.View>
+        )}
+
+        {/* AI Recommendation */}
+        <Animated.View entering={FadeInRight.delay(500).duration(500)}>
+          <AIRecommendationCard
+            onStart={handleAIRecommendation}
+            navigation={navigation}
+            refreshKey={refreshKey}
+            pronunciationStats={pronunciationStats}
+            inProgressModule={continueModule ? { title: continueModule.title, module: continueModule.id, route: continueModule.route } : null}
+          />
+        </Animated.View>
+
+        {/* Talk with SULTI + Daily Challenge */}
+        <Animated.View entering={FadeInRight.delay(600).duration(500)} style={styles.cardsFeed}>
+          <TouchableOpacity style={[styles.bannerCard, { backgroundColor: colors.primary }]} onPress={handleTalkToSulti} activeOpacity={0.9}>
             <View style={styles.bannerCardBadge}>
               <Text style={styles.bannerCardBadgeText}>NEW</Text>
             </View>
@@ -390,54 +491,52 @@ export default function LearnScreen({ navigation }) {
               <Text style={styles.bannerCardTitle}>Talk with SULTI</Text>
               <Text style={styles.bannerCardDesc}>Practice speaking Bisaya naturally with AI-powered voice recognition</Text>
             </View>
-            <TouchableOpacity style={[styles.bannerBtn, voiceSessionActive && styles.bannerBtnActive]} onPress={handleVoiceSession} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.bannerBtn, { backgroundColor: isDark ? '#0F172A' : '#FFFFFF' }]} onPress={handleTalkToSulti} activeOpacity={0.85}>
               <View style={styles.bannerBtnContent}>
-                {voiceSessionActive ? (
-                  <>
-                    <View style={styles.listeningDot} />
-                    <Text style={styles.bannerBtnTextActive}>Listening...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="mic" size={18} color={isDark ? '#0F172A' : '#FFFFFF'} />
-                    <Text style={[styles.bannerBtnText, { color: isDark ? '#0F172A' : '#FFFFFF' }]}>Start Voice Session</Text>
-                  </>
-                )}
+                <Ionicons name="mic" size={18} color={isDark ? '#FFFFFF' : '#0F172A'} />
+                <Text style={[styles.bannerBtnText, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>Start Voice Session</Text>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
 
-          {/* Daily Challenge Card */}
-          <DailyChallengeCard onStart={handleDailyChallengeStart} navigation={navigation} />
-        </Animated.View>
-
-        {/* AI Recommendation */}
-        <Animated.View entering={FadeInRight.delay(500).duration(500)}>
-          <AIRecommendationCard onStart={handleAIRecommendation} navigation={navigation} />
+          <DailyChallengeCard
+            onStart={handleDailyChallengeAction}
+            navigation={navigation}
+            refreshKey={refreshKey}
+          />
         </Animated.View>
 
         {/* Learning Modules */}
-        <Animated.View entering={FadeInRight.delay(600).duration(500)}>
+        <Animated.View entering={FadeInRight.delay(700).duration(500)}>
           <Text style={[styles.sectionTitle, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>Learning Modules</Text>
           <View style={styles.modulesGrid}>
-            {MODULES.map((module, index) => (
-              <ModuleCard
-                key={module.id}
-                title={module.title}
-                description={module.description}
-                iconName={module.iconName}
-                gradient={module.gradient}
-                index={index}
-                badge={module.badge}
-                badgeColor={module.badgeColor}
-                onPress={() => handleModulePress(module)}
-              />
-            ))}
+            {MODULES.map((module, index) => {
+              const pct = moduleProgressByTitle[module.title.toLowerCase()];
+              const hasProgress = pct !== undefined;
+              const statusLabel = hasProgress
+                ? (pct >= 100 ? 'Completed' : (pct === 0 ? 'Not started' : 'In progress'))
+                : undefined;
+              return (
+                <ModuleCard
+                  key={module.id}
+                  title={module.title}
+                  description={module.description}
+                  iconName={module.iconName}
+                  gradient={module.gradient}
+                  index={index}
+                  badge={module.badge}
+                  badgeColor={module.badgeColor}
+                  progress={hasProgress ? pct : null}
+                  statusLabel={statusLabel}
+                  onPress={() => handleModulePress(module)}
+                />
+              );
+            })}
           </View>
         </Animated.View>
 
         {/* Categories */}
-        <Animated.View entering={FadeInRight.delay(700).duration(500)} style={styles.categoriesSection}>
+        <Animated.View entering={FadeInRight.delay(800).duration(500)} style={styles.categoriesSection}>
           <Text style={[styles.sectionTitle, { color: isDark ? '#F1F5F9' : '#0F172A' }]}>Categories</Text>
           <View style={styles.categoriesGrid}>
             {CATEGORIES.map((category) => (
@@ -449,9 +548,6 @@ export default function LearnScreen({ navigation }) {
               >
                 <Ionicons name={category.icon} size={20} color={category.color} />
                 <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
-                <View style={[styles.categoryCount, { backgroundColor: colors.surfaceSecondary }]}>
-                  <Text style={[styles.categoryCountText, { color: colors.textSecondary }]}>{category.count}</Text>
-                </View>
               </TouchableOpacity>
             ))}
           </View>
@@ -460,6 +556,27 @@ export default function LearnScreen({ navigation }) {
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </AuroraBackground>
+  );
+}
+
+function ContinueCard({ title, pct, colors, onPress }) {
+  return (
+    <GlassCard variant="elevated" style={styles.continueCard} padding="md">
+      <TouchableOpacity style={styles.continueRow} onPress={onPress} activeOpacity={0.85}>
+        <View style={[styles.continueIcon, { backgroundColor: colors.accent + '15' }]}>
+          <Ionicons name="play" size={18} color={colors.accent} />
+        </View>
+        <View style={styles.continueInfo}>
+          <Text style={[styles.continueLabel, { color: colors.textSecondary }]}>Continue Learning</Text>
+          <Text style={[styles.continueTitle, { color: colors.text }]}>{title}</Text>
+          <View style={[styles.continueTrack, { backgroundColor: colors.surfaceSecondary }]}>
+            <View style={[styles.continueFill, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: colors.accent }]} />
+          </View>
+          <Text style={[styles.continueMeta, { color: colors.textSecondary }]}>{Math.round(pct)}% complete</Text>
+        </View>
+        <Ionicons name="arrow-forward" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+    </GlassCard>
   );
 }
 
@@ -475,7 +592,7 @@ const styles = StyleSheet.create({
   aiBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' },
   aiBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   notifBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
-  notifBadge: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
+  notifBadge: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   notifBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF' },
 
   quoteCard: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, marginBottom: spacing.lg, gap: spacing.md },
@@ -483,10 +600,22 @@ const styles = StyleSheet.create({
   quoteText: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
   quoteEnglish: { fontSize: 12, marginTop: 2 },
 
-  progressRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: spacing.lg },
+  goalSection: { marginBottom: spacing.lg },
+  goalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.sm },
+  goalTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+  goalSubtitle: { fontSize: 12, marginTop: 2 },
+  goalChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  goalChipText: { fontSize: 12, fontWeight: '700' },
+  goalValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  goalValue: { fontSize: 16, fontWeight: '800' },
+  goalPercent: { fontSize: 12, fontWeight: '700' },
+
+  progressRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', marginBottom: spacing.xl },
   progressRing: { alignItems: 'center', gap: 4 },
   progressRingValue: { fontSize: 11, fontWeight: '800', textAlign: 'center', maxWidth: 70 },
   progressRingLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  ringCta: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1, marginTop: 8 },
+  ringCtaText: { fontSize: 10, fontWeight: '700' },
 
   shimmerSection: { marginBottom: spacing.lg },
   shimmerHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
@@ -496,32 +625,26 @@ const styles = StyleSheet.create({
   shimmerFill: { height: '100%', borderRadius: 3, position: 'absolute', top: 0, left: 0 },
   shimmerOverlay: { height: '100%', borderRadius: 3, position: 'absolute', top: 0 },
 
-  mainGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
-  voiceCard: { flex: 2, borderRadius: borderRadius.xl, padding: spacing.lg, minHeight: 200 },
-  voiceCardBadge: { alignSelf: 'flex-start', backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginBottom: spacing.sm },
-  voiceCardBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
-  voiceCardTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: spacing.xs },
-  voiceCardDesc: { fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.7)', marginBottom: spacing.md },
-  voiceBtn: { backgroundColor: '#FFFFFF', paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg, borderRadius: 999, ...shadows.md },
-  voiceBtnActive: { backgroundColor: '#EF4444' },
-  voiceBtnContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  voiceBtnText: { fontSize: 13, fontWeight: '700' },
-  voiceBtnTextActive: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
-  listeningDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
+  continueCard: { marginBottom: spacing.md },
+  continueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  continueIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  continueInfo: { flex: 1 },
+  continueLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 2 },
+  continueTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3, marginBottom: spacing.xs },
+  continueTrack: { height: 5, borderRadius: 999, overflow: 'hidden', marginBottom: 4 },
+  continueFill: { height: '100%', borderRadius: 999 },
+  continueMeta: { fontSize: 11, fontWeight: '600' },
 
-  /* New vertical stack styles for cards feed */
   cardsFeed: { flexDirection: 'column', gap: spacing.md, marginBottom: spacing.lg, width: '100%' },
-  bannerCard: { flexDirection: 'column', alignItems: 'stretch', justifyContent: 'space-between', width: '100%', minHeight: 180, borderRadius: borderRadius.xl, padding: spacing.lg, boxSizing: 'border-box' },
+  bannerCard: { flexDirection: 'column', alignItems: 'stretch', justifyContent: 'space-between', width: '100%', minHeight: 180, borderRadius: borderRadius.xl, padding: spacing.lg },
   bannerCardBadge: { alignSelf: 'flex-start', backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginBottom: spacing.sm },
   bannerCardBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
   bannerCardContent: { flex: 1, marginBottom: spacing.md },
-  bannerCardTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: spacing.xs, whiteSpace: 'nowrap' },
+  bannerCardTitle: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: spacing.xs },
   bannerCardDesc: { fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.7)' },
-  bannerBtn: { backgroundColor: '#FFFFFF', paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg, borderRadius: 999, alignSelf: 'flex-start', ...shadows.md },
-  bannerBtnActive: { backgroundColor: '#EF4444' },
+  bannerBtn: { paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg, borderRadius: 999, alignSelf: 'flex-start', ...shadows.md },
   bannerBtnContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   bannerBtnText: { fontSize: 13, fontWeight: '700' },
-  bannerBtnTextActive: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 
   sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.md },
 
@@ -532,8 +655,6 @@ const styles = StyleSheet.create({
   categoryChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderRadius: borderRadius.lg, borderWidth: 1, gap: spacing.sm, minWidth: 120 },
 
   categoryName: { fontSize: 13, fontWeight: '600', flex: 1 },
-  categoryCount: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: 999 },
-  categoryCountText: { fontSize: 11, fontWeight: '600' },
 
   bottomSpacer: { height: 80 },
 });

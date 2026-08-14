@@ -13,6 +13,7 @@ export const FEATURES = [
   { id: 'pronunciation', title: 'Pronunciation', iconName: 'mic', gradient: ['#EC4899', '#DB2777'], path: 'Pronunciation' },
   { id: 'ar', title: 'AR Explore', iconName: 'camera', gradient: ['#10B981', '#059669'], path: 'ARScene' },
   { id: 'rewards', title: 'Rewards', iconName: 'trophy', gradient: ['#F97316', '#EA580C'], path: 'Achievements' },
+  { id: 'challenge', title: 'Daily Challenge', iconName: 'flame', gradient: ['#F59E0B', '#EF4444'], path: 'SULTI' },
 ];
 
 export const TAB_ROUTES = [

@@ -1,29 +1,34 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../../context/ThemeContext';
+import { useGame } from '../../../context/GameContext';
 import { spacing, borderRadius } from '../../../theme';
 
 interface TodayMissionProps {
   onStart?: () => void;
 }
 
-const MISSIONS = [
-  { id: 1, title: 'Practice 5 phrases', xp: 25, done: true },
-  { id: 2, title: 'Voice recording', xp: 15, done: true },
-  { id: 3, title: 'Review vocabulary', xp: 20, done: false },
-  { id: 4, title: 'Chat with AI Tutor', xp: 30, done: false },
+const DAILY_TARGETS = [
+  { label: 'Learn 10 new Bisaya words', count: 10 },
+  { label: 'Practice 10 phrases with SULTI', count: 10 },
+  { label: 'Master 8 new words today', count: 8 },
+  { label: 'Speak 12 words out loud', count: 12 },
 ];
 
 export function TodayMission({ onStart }: TodayMissionProps) {
   const { colors, getAnimationDuration } = useTheme();
+  const { dailyXp, dailyGoal } = useGame();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  const completed = MISSIONS.filter((m) => m.done).length;
-  const totalXP = MISSIONS.reduce((sum, m) => sum + m.xp, 0);
-  const earnedXP = MISSIONS.filter((m) => m.done).reduce((sum, m) => sum + m.xp, 0);
-  const progress = (completed / MISSIONS.length) * 100;
+  const target = DAILY_TARGETS[new Date().getDate() % DAILY_TARGETS.length];
+  const goal = dailyGoal > 0 ? dailyGoal : 50;
+  const earned = Math.min(dailyXp, goal);
+  const progress = Math.round((earned / goal) * 100);
+  const remaining = Math.max(goal - earned, 0);
+  const done = earned >= goal;
 
   useEffect(() => {
     Animated.sequence([
@@ -36,65 +41,66 @@ export function TodayMission({ onStart }: TodayMissionProps) {
 
   return (
     <Animated.View style={[styles.wrapper, { opacity: fadeAnim }]}>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <LinearGradient
+        colors={done ? [colors.success, colors.gradientB] : [colors.gradientA, colors.gradientB]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
+      >
         <View style={styles.header}>
-          <View style={[styles.iconWrapper, { backgroundColor: colors.softOrange }]}>
-            <Ionicons name="trophy" size={18} color={colors.secondary} />
-          </View>
           <View style={styles.headerText}>
-            <Text style={[styles.title, { color: colors.text }]}>Today's Mission</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{completed}/{MISSIONS.length} completed</Text>
+            <Text style={styles.eyebrow}>TODAY&apos;S GOAL</Text>
+            <Text style={styles.title}>{done ? 'Goal complete! Great job!' : target.label}</Text>
           </View>
-          <View style={[styles.xpBadge, { backgroundColor: colors.softPurple }]}>
-            <Text style={[styles.xpText, { color: colors.primary }]}>{earnedXP}/{totalXP} XP</Text>
+          <View style={[styles.badge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+            <Ionicons name="trophy" size={14} color="#fff" />
           </View>
         </View>
 
-          <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
-          <Animated.View style={[styles.progressBarFill, { width: progressWidth, backgroundColor: colors.primary }]} />
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressLabel}>{done ? 'All done for today' : `${remaining} to go`}</Text>
+          <Text style={styles.progressPercent}>
+            {earned}/{goal}
+          </Text>
         </View>
 
-        <View style={styles.missionsList}>
-          {MISSIONS.map((mission) => (
-            <View key={mission.id} style={styles.missionRow}>
-              <Ionicons
-                name={mission.done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={18}
-                color={mission.done ? colors.success : colors.textLight}
-              />
-              <Text style={[styles.missionText, { color: mission.done ? colors.textSecondary : colors.text, textDecorationLine: mission.done ? 'line-through' : 'none' }]}>
-                {mission.title}
-              </Text>
-              <Text style={[styles.missionXp, { color: colors.warning }]}>+{mission.xp}</Text>
-            </View>
-          ))}
+        <View style={styles.progressBarBg}>
+          <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
         </View>
 
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.secondary }]} onPress={onStart} activeOpacity={0.85}>
-          <Text style={styles.ctaText}>Continue Mission</Text>
-          <Ionicons name="arrow-forward" size={16} color="#fff" />
-        </TouchableOpacity>
-      </View>
+        {!done && (
+          <TouchableOpacity style={styles.ctaButton} onPress={onStart} activeOpacity={0.85}>
+            <Text style={[styles.ctaText, { color: colors.primary }]}>Keep Going</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+      </LinearGradient>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: spacing.xl, marginBottom: spacing.lg },
-  card: { borderRadius: borderRadius.xl, padding: spacing.lg, borderWidth: 1, gap: spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  iconWrapper: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  card: { borderRadius: borderRadius.xxl, padding: spacing.xl, gap: spacing.md },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   headerText: { flex: 1 },
-  title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  subtitle: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  xpBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: borderRadius.full },
-  xpText: { fontSize: 11, fontWeight: '700' },
-  progressBarBg: { height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 3 },
-  missionsList: { gap: spacing.sm },
-  missionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  missionText: { flex: 1, fontSize: 14, fontWeight: '500' },
-  missionXp: { fontSize: 12, fontWeight: '700' },
-  ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.xl },
-  ctaText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  eyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
+  title: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  badge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  progressLabel: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
+  progressPercent: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  progressBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' },
+  progressBarFill: { height: '100%', backgroundColor: '#fff', borderRadius: 4 },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#fff',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    marginTop: spacing.xs,
+  },
+  ctaText: { fontSize: 14, fontWeight: '700' },
 });

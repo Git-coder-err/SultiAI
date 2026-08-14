@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +29,9 @@ import { spacing, borderRadius, typography, shadows } from '../../theme';
  *   onPress: Function,
  *   index: number,
  *   badge?: string,
- *   badgeColor?: string
+ *   badgeColor?: string,
+ *   progress?: number | null,
+ *   statusLabel?: string
  * }} props
  */
 export default function ModuleCard({
@@ -41,7 +42,9 @@ export default function ModuleCard({
   onPress,
   index = 0,
   badge,
-  badgeColor
+  badgeColor,
+  progress = null,
+  statusLabel
 }) {
   const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -120,6 +123,18 @@ export default function ModuleCard({
             </View>
             <Text style={[styles.moduleTitle, { color: colors.text }]}>{title}</Text>
             <Text style={[styles.moduleDescription, { color: colors.textSecondary }]}>{description}</Text>
+            {progress !== null && progress !== undefined ? (
+              <View style={styles.progressWrap}>
+                <View style={[styles.progressTrack, { backgroundColor: colors.surfaceSecondary }]}>
+                  <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, progress))}%`, backgroundColor: gradient[0] }]} />
+                </View>
+                <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+                  {progress >= 100 ? 'Completed' : statusLabel || `${Math.round(progress)}%`}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.progressLabel, styles.notStarted, { color: colors.textSecondary }]}>Not started</Text>
+            )}
             <TouchableOpacity
               style={[styles.startBtn, { backgroundColor: gradient[0] }]}
               onPress={onPress}
@@ -177,8 +192,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     letterSpacing: -0.08,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     ...typography.caption,
+  },
+  progressWrap: {
+    marginBottom: spacing.md,
+  },
+  progressTrack: {
+    height: 5,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: -0.08,
+  },
+  notStarted: {
+    marginBottom: spacing.md,
   },
   startBtn: {
     flexDirection: 'row',

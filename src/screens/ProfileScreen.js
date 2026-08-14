@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Animated, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { api } from '../services/api';
-import Card from '../components/Card';
 import GlassCard from '../components/GlassCard';
 import Avatar from '../components/Avatar';
 import StreakFlame from '../components/StreakFlame';
@@ -18,33 +16,6 @@ import ConfirmModal from '../components/ConfirmModal';
 import AuroraBackground from '../components/AuroraBackground';
 import { spacing, borderRadius, shadows } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const WEEKLY_ACTIVITY = [
-  { day: 'M', xp: 45, color: '#14B8A6' },
-  { day: 'T', xp: 80, color: '#14B8A6' },
-  { day: 'W', xp: 30, color: '#14B8A6' },
-  { day: 'T', xp: 120, color: '#14B8A6' },
-  { day: 'F', xp: 65, color: '#14B8A6' },
-  { day: 'S', xp: 95, color: '#14B8A6' },
-  { day: 'S', xp: 140, color: '#14B8A6' },
-];
-
-const SKILLS = [
-  { label: 'Vocabulary', value: 72, color: '#14B8A6' },
-  { label: 'Speaking', value: 58, color: '#3B82F6' },
-  { label: 'Pronunciation', value: 84, color: '#8B5CF6' },
-  { label: 'Listening', value: 61, color: '#F59E0B' },
-  { label: 'Reading', value: 47, color: '#EC4899' },
-  { label: 'Writing', value: 39, color: '#10B981' },
-];
-
-const MODULE_TIME = [
-  { label: 'Voice Practice', hours: 4.5, color: '#14B8A6' },
-  { label: 'Phrasebook', hours: 3.2, color: '#3B82F6' },
-  { label: 'Flashcards', hours: 2.1, color: '#F59E0B' },
-  { label: 'Grammar', hours: 1.4, color: '#8B5CF6' },
-  { label: 'Listening', hours: 2.8, color: '#EC4899' },
-];
 
 const MOCK_CERTIFICATES = [
   { id: 'cert1', title: 'Beginner Bisaya', date: 'Mar 2026', icon: 'ribbon', color: '#10B981' },
@@ -76,6 +47,7 @@ export default function ProfileScreen({ navigation }) {
   const levelInfo = getLevelInfo(xp);
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const num = (v) => Math.max(0, Number(v) || 0);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,16 +59,51 @@ export default function ProfileScreen({ navigation }) {
   const [infoModal, setInfoModal] = useState(null);
   const [showSignOut, setShowSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [weeklyActivity, setWeeklyActivity] = useState([]);
+  const [moduleMastery, setModuleMastery] = useState([]);
+
+  const DAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const loadSettings = async () => { try { const d = await api.getUserSettings(); setSettings(d); } catch {} };
+  const loadSavedPhrases = async () => { try { const d = await api.getSavedPhrases(); setSavedPhrases(Array.isArray(d) ? d : []); } catch {} };
+  const loadAnalytics = async () => {
+    try {
+      const weekly = await api.getWeeklyProgress();
+      if (Array.isArray(weekly) && weekly.length) {
+        setWeeklyActivity(
+          weekly.map((w) => ({
+            day: DAY_KEYS[new Date(w.date).getDay()] ?? w.date,
+            xp: num(w.xp),
+            color: '#14B8A6',
+          }))
+        );
+      }
+    } catch {}
+    try {
+      const modules = await api.getLearningProgress();
+      if (Array.isArray(modules) && modules.length) {
+        const rows = modules
+          .map((m) => ({
+            label: m.module_title || m.moduleTitle || 'Module',
+            value: num(m.completion_percent ?? m.completionPercent),
+            color: '#3B82F6',
+          }))
+          .filter((r) => r.value > 0)
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 6);
+        setModuleMastery(rows);
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     if (user) { setEditName(user.name || ''); setEditCountry(user.country || ''); }
     loadSettings();
     loadSavedPhrases();
+    loadAnalytics();
     Animated.timing(fadeAnim, { toValue: 1, duration: getAnimationDuration(600), useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  const loadSettings = async () => { try { const d = await api.getUserSettings(); setSettings(d); } catch {} };
-  const loadSavedPhrases = async () => { try { const d = await api.getSavedPhrases(); setSavedPhrases(Array.isArray(d) ? d : []); } catch {} };
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -148,7 +155,7 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.headerStats}>
               <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.headerStatValue}>{xp} XP</Text>
+                <Text style={styles.headerStatValue}>{num(xp)} XP</Text>
                 <View style={[styles.levelBadge, { backgroundColor: levelInfo.color }]}>
                   <Ionicons name={levelInfo.icon} size={10} color="#fff" />
                   <Text style={styles.levelText}>Lv. {levelInfo.level}</Text>
@@ -156,7 +163,7 @@ export default function ProfileScreen({ navigation }) {
               </View>
               <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <Ionicons name="heart" size={16} color="#FF6B6B" />
-                <Text style={styles.headerStatValue}>{hearts} Hearts</Text>
+                <Text style={styles.headerStatValue}>{num(hearts)} Hearts</Text>
               </View>
               <View style={[styles.headerStatPill, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <StreakFlame streak={streak} />
@@ -200,25 +207,25 @@ export default function ProfileScreen({ navigation }) {
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Words Learned</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.accent }]}>{xp}</Text>
+                      <Text style={[styles.statNum, { color: colors.accent }]}>{num(xp)}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total XP</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.success }]}>{streak}</Text>
+                      <Text style={[styles.statNum, { color: colors.success }]}>{num(streak)}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Day Streak</Text>
                     </View>
                   </View>
                   <View style={styles.statRow}>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: '#8B5CF6' }]}>{coins}</Text>
+                      <Text style={[styles.statNum, { color: '#8B5CF6' }]}>{num(coins)}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Coins</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: '#FF6B6B' }]}>{hearts}</Text>
+                      <Text style={[styles.statNum, { color: '#FF6B6B' }]}>{num(hearts)}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Hearts</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNum, { color: colors.accent }]}>{badges.length}</Text>
+                      <Text style={[styles.statNum, { color: colors.accent }]}>{num(badges.length)}</Text>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Badges</Text>
                     </View>
                   </View>
@@ -249,20 +256,24 @@ export default function ProfileScreen({ navigation }) {
                     </View>
                     <Text style={[styles.analyticsTitle, { color: colors.text }]}>Weekly Activity</Text>
                   </View>
-                  <View style={styles.barChart}>
-                    {WEEKLY_ACTIVITY.map((d, i) => {
-                      const max = Math.max(...WEEKLY_ACTIVITY.map((x) => x.xp));
-                      return (
-                        <View key={i} style={styles.barCol}>
-                          <Text style={[styles.barValue, { color: colors.textSecondary }]}>{d.xp}</Text>
-                          <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                            <View style={[styles.barFill, { height: `${(d.xp / max) * 100}%`, backgroundColor: d.color }]} />
+                  {weeklyActivity.length === 0 ? (
+                    <Text style={[styles.emptyAnalytics, { color: colors.textLight }]}>Practice with SULTI this week to see your activity.</Text>
+                  ) : (
+                    <View style={styles.barChart}>
+                      {weeklyActivity.map((d, i) => {
+                        const max = Math.max(...weeklyActivity.map((x) => x.xp), 1);
+                        return (
+                          <View key={i} style={styles.barCol}>
+                            <Text style={[styles.barValue, { color: colors.textSecondary }]}>{num(d.xp)}</Text>
+                            <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
+                              <View style={[styles.barFill, { height: `${(num(d.xp) / max) * 100}%`, backgroundColor: d.color }]} />
+                            </View>
+                            <Text style={[styles.barDay, { color: colors.textLight }]}>{d.day}</Text>
                           </View>
-                          <Text style={[styles.barDay, { color: colors.textLight }]}>{d.day}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </GlassCard>
 
                 <GlassCard variant="elevated" style={styles.analyticsCard}>
@@ -270,39 +281,40 @@ export default function ProfileScreen({ navigation }) {
                     <View style={[styles.linkIcon, { backgroundColor: colors.accent + '20' }]}>
                       <Ionicons name="pulse" size={18} color={colors.accent} />
                     </View>
-                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Skill Mastery</Text>
+                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Module Mastery</Text>
                   </View>
-                  {SKILLS.map((s) => (
-                    <View key={s.label} style={styles.skillRow}>
-                      <Text style={[styles.skillLabel, { color: colors.textSecondary }]}>{s.label}</Text>
-                      <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
-                        <View style={[styles.skillFill, { width: `${s.value}%`, backgroundColor: s.color }]} />
+                  {moduleMastery.length === 0 ? (
+                    <Text style={[styles.emptyAnalytics, { color: colors.textLight }]}>Complete a lesson to start building your skills.</Text>
+                  ) : (
+                    moduleMastery.map((s) => (
+                      <View key={s.label} style={styles.skillRow}>
+                        <Text style={[styles.skillLabel, { color: colors.textSecondary }]} numberOfLines={1}>{s.label}</Text>
+                        <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
+                          <View style={[styles.skillFill, { width: `${num(s.value)}%`, backgroundColor: s.color }]} />
+                        </View>
+                        <Text style={[styles.skillValue, { color: colors.text }]}>{num(s.value)}%</Text>
                       </View>
-                      <Text style={[styles.skillValue, { color: colors.text }]}>{s.value}%</Text>
-                    </View>
-                  ))}
+                    ))
+                  )}
                 </GlassCard>
 
                 <GlassCard variant="elevated" style={styles.analyticsCard}>
                   <View style={styles.analyticsTitleRow}>
                     <View style={[styles.linkIcon, { backgroundColor: colors.success + '20' }]}>
-                      <Ionicons name="time" size={18} color={colors.success} />
+                      <Ionicons name="trending-up" size={18} color={colors.success} />
                     </View>
-                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Learning Time</Text>
-                    <Text style={[styles.analyticsTotal, { color: colors.textSecondary }]}>14.0h total</Text>
+                    <Text style={[styles.analyticsTitle, { color: colors.text }]}>Level Progress</Text>
                   </View>
-                  {MODULE_TIME.map((m) => {
-                    const max = Math.max(...MODULE_TIME.map((x) => x.hours));
-                    return (
-                      <View key={m.label} style={styles.skillRow}>
-                        <Text style={[styles.skillLabel, { color: colors.textSecondary }]}>{m.label}</Text>
-                        <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
-                          <View style={[styles.skillFill, { width: `${(m.hours / max) * 100}%`, backgroundColor: m.color }]} />
-                        </View>
-                        <Text style={[styles.skillValue, { color: colors.text }]}>{m.hours}h</Text>
-                      </View>
-                    );
-                  })}
+                  <View style={styles.analyticsTitleRow}>
+                    <Text style={[styles.skillValue, { color: colors.text }]}>LEVEL {levelInfo.level}</Text>
+                    <Text style={[styles.analyticsTotal, { color: colors.textLight }]}>{levelInfo.label}</Text>
+                  </View>
+                  <View style={[styles.skillTrack, { backgroundColor: colors.border }]}>
+                    <View style={[styles.skillFill, { width: `${num(levelInfo.progress)}%`, backgroundColor: colors.success }]} />
+                  </View>
+                  <Text style={[styles.levelProgressHint, { color: colors.textLight }]}>
+                    {num(xp)} / {num(levelInfo.xpForNext)} XP &middot; {num(levelInfo.progress)}% to next level
+                  </Text>
                 </GlassCard>
 
                 <Text style={[styles.sectionHeader, { color: colors.text }]}>More</Text>
@@ -684,6 +696,8 @@ const styles = StyleSheet.create({
   skillTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
   skillFill: { height: '100%', borderRadius: 4 },
   skillValue: { width: 40, fontSize: 12, fontWeight: '700', textAlign: 'right' },
+  levelProgressHint: { fontSize: 13, fontWeight: '600', marginTop: spacing.sm, textAlign: 'center' },
+  emptyAnalytics: { fontSize: 13, lineHeight: 19, paddingVertical: spacing.sm },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalSheet: { borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl, padding: spacing.lg, paddingBottom: spacing.xxl, maxHeight: '70%', borderWidth: 1 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },

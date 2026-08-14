@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Animated, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, Animated, RefreshControl, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
@@ -8,16 +8,12 @@ import { SmartWelcomeHeader } from './dashboard/components/SmartWelcomeHeader';
 import { AILearningSummary } from './dashboard/components/AILearningSummary';
 import { AILearningCoach } from './dashboard/components/AILearningCoach';
 import { PhraseOfTheDay } from './dashboard/components/PhraseOfTheDay';
-import { VoiceChallenge } from './dashboard/components/VoiceChallenge';
 import { AIChatTutor } from './dashboard/components/AIChatTutor';
 import { TodayMission } from './dashboard/components/TodayMission';
-import { LearningAnalytics } from './dashboard/components/LearningAnalytics';
 import { AchievementsPreview } from './dashboard/components/AchievementsPreview';
 import { DailyDiscovery } from './dashboard/components/DailyDiscovery';
-import { CommunityHighlights } from './dashboard/components/CommunityHighlights';
-import { RecentActivity } from './dashboard/components/RecentActivity';
-import { TravelSuggestion } from './dashboard/components/TravelSuggestion';
 import { DailyRewardCard } from './dashboard/components/DailyRewardCard';
+import { WeeklyActivity } from './dashboard/components/WeeklyActivity';
 import OnboardingForm from '../components/OnboardingForm';
 import FeatureGrid from '../components/FeatureGrid';
 import DailyChallengeCard from '../components/learning/DailyChallengeCard';
@@ -28,7 +24,7 @@ interface DashboardScreenProps {
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { colors, getAnimationDuration } = useTheme();
-  const { addXp } = useGame();
+  const { addXp } = useGame() as any;
   const scrollY = useRef(new Animated.Value(0)).current;
   const [refreshing, setRefreshing] = React.useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
@@ -72,10 +68,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     navigation.navigate('SULTI', { situation: 'AI Coaching Session', label: 'AI Coach' });
   };
 
-  const handlePracticePhrase = () => {
-    navigation.navigate('Pronunciation');
-  };
-
   const handleOpenTutor = () => {
     navigation.navigate('SULTI');
   };
@@ -84,14 +76,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     navigation.navigate('Achievements');
   };
 
-  const handleOpenCommunity = () => {
-    navigation.navigate('Community');
-  };
-
   const handleStartChallenge = (challenge: any) => {
     if (challenge) {
       navigation.navigate('SULTI', { situation: challenge.scenario, label: challenge.title });
     }
+  };
+
+  const handleCultureNotes = () => {
+    navigation.navigate('CultureNotes');
   };
 
   return (
@@ -106,41 +98,39 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
       >
-        <Animated.View style={{ opacity: headerOpacity }}>
-          <SmartWelcomeHeader
-            onNotificationPress={() => navigation.navigate('Profile')}
-            onSettingsPress={() => navigation.navigate('Profile')}
-            onProfilePress={() => navigation.navigate('Profile')}
-          />
-        </Animated.View>
-
-        {onboardingComplete === false && (
-          <View style={styles.onboardingWrap}>
-            <OnboardingForm
-              initialName=""
-              onComplete={finishOnboarding}
-              onSkip={finishOnboarding}
+        <View style={styles.contentWidth}>
+          <Animated.View style={{ opacity: headerOpacity }}>
+            <SmartWelcomeHeader
+              onNotificationPress={() => navigation.navigate('Notifications')}
+              onSettingsPress={() => navigation.navigate('Profile')}
+              onProfilePress={() => navigation.navigate('Profile')}
             />
-          </View>
-        )}
+          </Animated.View>
 
-        <FeatureGrid navigation={navigation} />
-        <DailyRewardCard />
-        <AILearningSummary onContinueLearning={handleContinueLearning} />
-        <AILearningCoach onStartCoaching={handleStartCoaching} />
-        <PhraseOfTheDay onPractice={handlePracticePhrase} />
-        <VoiceChallenge />
-        <AIChatTutor onOpenTutor={handleOpenTutor} />
-        <TodayMission onStart={handleContinueLearning} />
-        <DailyChallengeCard onStart={handleStartChallenge} navigation={navigation} />
-        <LearningAnalytics />
-        <TravelSuggestion onPractice={handlePracticePhrase} />
-        <CommunityHighlights onOpenCommunity={handleOpenCommunity} />
-        <RecentActivity onOpenTutor={handleOpenTutor} />
-        <AchievementsPreview onViewAll={handleViewAchievements} />
-        <DailyDiscovery />
+          {onboardingComplete === false && (
+            <View style={styles.onboardingWrap}>
+              <OnboardingForm
+                initialName=""
+                onComplete={finishOnboarding}
+                onSkip={finishOnboarding}
+              />
+            </View>
+          )}
 
-        <View style={styles.bottomSpacer} />
+          <TodayMission onStart={handleContinueLearning} />
+          <AILearningSummary onContinueLearning={handleContinueLearning} />
+          <AILearningCoach onStartCoaching={handleStartCoaching} />
+          <AIChatTutor navigation={navigation} onOpenTutor={handleOpenTutor} />
+          <PhraseOfTheDay />
+          <FeatureGrid navigation={navigation} />
+          <DailyChallengeCard onStart={handleStartChallenge} navigation={navigation} />
+          <WeeklyActivity />
+          <DailyDiscovery onLearnMore={handleCultureNotes} />
+          <DailyRewardCard />
+          <AchievementsPreview onViewAll={handleViewAchievements} />
+
+          <View style={styles.bottomSpacer} />
+        </View>
       </Animated.ScrollView>
     </View>
   );
@@ -152,4 +142,9 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 120 },
   bottomSpacer: { height: 40 },
   onboardingWrap: { marginBottom: spacing.lg },
+  contentWidth: {
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 720 : undefined,
+    alignSelf: 'center',
+  },
 });

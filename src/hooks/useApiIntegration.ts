@@ -63,7 +63,7 @@ export function useLessonGenerator() {
 }
 
 export function useVocabularyReview() {
-  const { execute, ...state } = useApiIntegration(api.getVocabularyDue);
+  const { execute, ...state } = useApiIntegration(api.getDueForReview);
   return { getDueWords: execute, ...state };
 }
 

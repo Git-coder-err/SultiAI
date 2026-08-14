@@ -48,13 +48,13 @@ export default function LearningProgressCard() {
       const data = await api.getWeeklyProgress();
       setAnalytics(data);
     } catch (e) {
-      // Use mock data based on game context
+      // Offline: show real game-context data only, no fabricated analytics
       setAnalytics({
-        wordsLearned: 62,
-        pronunciationAvg: 91,
-        weeklyXp: 540,
-        weeklyGoal: 700,
-        sessionsThisWeek: 12,
+        wordsLearned: 0,
+        pronunciationAvg: 0,
+        weeklyXp: 0,
+        weeklyGoal: Math.max(1, dailyGoal * 7),
+        sessionsThisWeek: 0,
         streak: streak,
       });
     } finally {
@@ -178,7 +178,7 @@ export default function LearningProgressCard() {
             <View style={[styles.statIcon, { backgroundColor: colors.accent + '20' }]}>
               <Ionicons name="book" size={20} color={colors.accent} />
             </View>
-            <Text style={[styles.statValue, { color: colors.text }]}>{analytics?.wordsLearned || 62}</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{Math.max(0, Number(analytics?.wordsLearned) || 0)}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Words Learned</Text>
           </View>
 
@@ -186,7 +186,7 @@ export default function LearningProgressCard() {
             <View style={[styles.statIcon, { backgroundColor: colors.success + '20' }]}>
               <Ionicons name="mic" size={20} color={colors.success} />
             </View>
-            <Text style={[styles.statValue, { color: colors.text }]}>{analytics?.pronunciationAvg || 91}%</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{Math.max(0, Number(analytics?.pronunciationAvg) || 0)}%</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pronunciation</Text>
           </View>
 
@@ -194,7 +194,7 @@ export default function LearningProgressCard() {
             <View style={[styles.statIcon, { backgroundColor: colors.secondary + '20' }]}>
               <Ionicons name="star" size={20} color={colors.secondary} />
             </View>
-            <Text style={[styles.statValue, { color: colors.text }]}>{analytics?.weeklyXp || 540}</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>{Math.max(0, Number(analytics?.weeklyXp) || 0)}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Weekly XP</Text>
           </View>
         </View>
