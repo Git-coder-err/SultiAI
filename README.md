@@ -1,454 +1,1526 @@
+<div align="center">
 
-# 📄 Updated README.md with Revised Full Tech Stack
+<a href="https://github.com/Git-coder-err/SultiAI">
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:5B5FEF,50:2563EB,100:0D9488&height=230&section=header&text=SultiAI&fontSize=72&fontColor=ffffff&fontAlignY=38&desc=AI%20Language%20Companion%20for%20Context-Aware%20Communication&descAlignY=60&descSize=18&animation=fadeIn" width="100%"/>
+</a>
 
-Here's your complete README.md file with the **Revised Full Tech Stack** section added prominently:
+<br>
+
+<img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=22&duration=3000&pause=1000&color=5B5FEF&center=true&vCenter=true&width=800&lines=Learn+Bisaya.+Speak+Confidently.;AI-Powered+Context-Aware+Communication;Speech+%E2%86%92+Context+%E2%86%92+Recommendation;Built+for+Real-World+Conversations;Language+Technology+for+Cultural+Preservation" alt="SultiAI typing animation"/>
+
+<br><br>
+
+<p align="center">
+  <strong>SultiAI</strong> is an AI-powered language companion designed to help non-native speakers communicate naturally and confidently in real-world situations.
+</p>
+
+<br>
+
+<p align="center">
+  <a href="#-vision">Vision</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-technology-stack">Tech Stack</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-setup-guide">Setup</a> •
+  <a href="#-development-status">Status</a>
+</p>
+
+<br>
+
+<p align="center">
+
+[![Status](https://img.shields.io/badge/Status-In%20Development-5B5FEF?style=for-the-badge)](#-development-status)
+[![Capstone](https://img.shields.io/badge/Project-Capstone%20Project-2563EB?style=for-the-badge)](#-sultiai)
+[![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Mobile-0D9488?style=for-the-badge)](#-technology-stack)
+[![License](https://img.shields.io/badge/License-MIT-success?style=for-the-badge)](./LICENSE)
+
+</p>
+
+<p align="center">
+
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square\&logo=react\&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-0.72%2B-61DAFB?style=flat-square\&logo=react\&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178C6?style=flat-square\&logo=typescript\&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square\&logo=node.js\&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square\&logo=python\&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-4169E1?style=flat-square\&logo=postgresql\&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square\&logo=docker\&logoColor=white)
+
+</p>
+
+</div>
 
 ---
 
-# SultiAI
+# 🗣️ SultiAI
 
 ## AI Language Companion for Context-Aware Communication
 
-SultiAI is a Capstone Project developed by BSIT students of Jose Maria College Foundation, Inc.
+SultiAI is a **Capstone Project** developed by BSIT students of **Jose Maria College Foundation, Inc.**
 
-Unlike traditional translation applications that simply convert words from one language to another, SultiAI serves as an AI Language Companion that assists users in real-life conversations by understanding context and suggesting appropriate responses.
+Unlike traditional translation applications that simply convert words from one language to another, SultiAI is designed as an **AI Language Companion** that understands conversational context and helps users select appropriate responses.
 
-The project is designed to help non-native speakers communicate more naturally and confidently in everyday situations such as schools, workplaces, public transportation, restaurants, hospitals, and government offices.
+The system is designed to support non-native speakers in real-world situations such as:
 
-**SultiAI can run completely offline with no API keys required!**
+* 🏫 Schools
+* 💼 Workplaces
+* 🚌 Public transportation
+* 🍽️ Restaurants
+* 🏥 Hospitals
+* 🏛️ Government offices
+* 🛍️ Everyday social interactions
 
----
+The goal is to help users move from:
 
-## 📌 Table of Contents
-
-- [Vision](#vision)
-- [Core Principle](#core-principle)
-- [Main Features](#main-features)
-- [Revised Full Tech Stack](#revised-full-tech-stack)
-- [📑 Manuscript Revision Checklist](#-manuscript-revision-checklist)
-- [Development Status](#development-status)
-- [Contributors](#contributors)
-- [Adviser](#adviser)
-- [License](#license)
-- [Setup Guide](#setup-guide-for-other-devices--collaborators)
-
----
-
-## 🎯 Vision
-
-To bridge language barriers by providing context-aware AI communication assistance that empowers users to communicate naturally and confidently in real-world situations.
-
----
-
-## 🧭 Core Principle
-
-SultiAI does not aim to replace human conversation.
-
-Instead, it empowers users by providing contextual guidance during conversations while helping them gradually learn and become more confident speakers.
-
----
-
-## ⚡ Main Features
-
-- Real-time Speech Recognition
-- AI Response Suggestions
-- Context-aware Conversation Assistance
-- AI Avatar Companion
-- Translation Support
-- Phrase Recommendation
-- Community Learning
-- Personalized Language Assistance
-
----
-
-## 🛠️ Revised Full Tech Stack
-
-*Last Updated: August 2026*
-
-### System Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         CLIENT LAYER                                   │
-├─────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │   Web App    │  │ Mobile App   │  │ Admin Panel  │               │
-│  │   (React)    │  │ (React Native)│  │  (React)    │               │
-│  └──────────────┘  └──────────────┘  └──────────────┘               │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         API GATEWAY                                    │
-│                   (Node.js + Express + TypeScript)                     │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      SERVICES LAYER                                    │
-├─────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │   Whisper    │  │    BERT      │  │ Translation │               │
-│  │   Service    │  │   Service    │  │  Service    │               │
-│  │   (Python)   │  │   (Python)   │  │  (Python)   │               │
-│  └──────────────┘  └──────────────┘  └──────────────┘               │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        DATA LAYER                                      │
-├─────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │  PostgreSQL  │  │   Redis      │  │   S3/MinIO  │               │
-│  │  (Primary)   │  │  (Cache)     │  │  (Storage)  │               │
-│  └──────────────┘  └──────────────┘  └──────────────┘               │
-└─────────────────────────────────────────────────────────────────────────┘
+```text
+Translation Dependency
+        ↓
+Contextual Understanding
+        ↓
+Guided Communication
+        ↓
+Language Learning
+        ↓
+Conversational Confidence
 ```
 
-### 1. 🖥️ Frontend (User-Facing Applications)
+---
 
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Web App Framework | React | 18.2+ | Main user interface for desktop/browser |
-| Mobile Framework | React Native | 0.72+ | Mobile app for iOS/Android |
-| Shared Core | TypeScript | 5.0+ | Shared business logic & types (monorepo) |
-| State Management | Zustand | 4.4+ | Simple state management across web/mobile |
-| Data Fetching | TanStack Query | 4.0+ | Caching, loading states, pagination |
-| Routing (Web) | React Router DOM | 6.18+ | Web navigation |
-| Routing (Mobile) | React Navigation | 6.0+ | Native navigation |
-| Styling (Web) | Tailwind CSS | 3.3+ | Utility-first CSS |
-| Styling (Mobile) | NativeWind | 4.0+ | Tailwind for React Native |
-| UI Components (Web) | Shadcn/UI | Latest | Accessible, customizable components |
-| UI Components (Mobile) | React Native Paper | 5.0+ | Material Design components |
-| Audio Recording (Web) | Web Audio API | Native | Browser audio capture |
-| Audio Recording (Mobile) | react-native-audio-recorder-player | 3.5+ | Native audio recording |
-| Build Tool | Vite | 4.5+ | Fast builds and HMR |
-| Build Tool (Mobile) | Metro | 0.76+ | React Native bundler |
-| Package Manager | pnpm | 8.0+ | Fast, disk-efficient monorepo support |
+# 📌 Table of Contents
 
-### 2. 🖥️ Admin Dashboard (Management Panel)
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Framework | React | 18.2+ | Admin panel UI |
-| Admin Builder | KratosJs | Latest | Generate CRUD admin panel from data models |
-| UI Components | Shadcn/UI | Latest | Consistent with main app |
-| Data Grid | AG Grid | 29.0+ | Advanced data tables |
-| Forms | React Hook Form | 7.47+ | Form handling and validation |
-| Charts | Recharts | 2.8+ | Analytics and visualizations |
-| Authentication | Custom JWT + RBAC | - | Role-based access control |
-| API Client | TanStack Query | 4.0+ | Consistent with main app |
-
-### 3. 🖥️ Backend API (Node.js)
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Runtime | Node.js | 18+ (LTS) | Server-side JavaScript |
-| Framework | Express.js | 4.18+ | REST API framework |
-| Language | TypeScript | 5.0+ | Type safety |
-| API Documentation | Swagger/OpenAPI | 3.0 | API documentation |
-| Authentication | JWT | 9.0+ | User authentication |
-| Authorization | Custom RBAC | - | Role-based access control |
-| Validation | Zod | 3.22+ | Schema validation |
-| Rate Limiting | express-rate-limit | 6.0+ | Prevent abuse |
-| Security | Helmet | 7.0+ | Security headers |
-| Logging | Winston | 3.11+ | Structured logging |
-| Monitoring | Prometheus + Grafana | - | Metrics and monitoring |
-| Queue System | BullMQ | 4.0+ | Background job processing |
-| Process Manager | PM2 | 5.3+ | Production process management |
-
-### 4. 🧠 AI Services (Python Microservice)
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Framework | FastAPI | 0.104+ | Modern Python API with automatic OpenAPI docs |
-| Speech Recognition | OpenAI Whisper | Latest | Convert speech to text |
-| NLP/Intent Classification | BERT (Hugging Face) | Latest | Context understanding |
-| Translation | Google Cloud Translation API | Latest | Multi-language translation |
-| Model Serving | PyTorch | 2.0+ | Deep learning framework |
-| Container | Docker | Latest | Isolated deployment |
-| Audio Processing | librosa | 0.10+ | Audio feature extraction |
-| Environment | Conda | Latest | Python dependency management |
-
-### 5. 🗄️ Database & Storage
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Primary Database | PostgreSQL | 15.0+ | Main relational database |
-| ORM/Query Builder | Prisma | 5.0+ | Type-safe database access |
-| Migration Tool | Prisma Migrate | 5.0+ | Schema migrations |
-| Cache | Redis | 7.0+ | Caching and message queue |
-| File Storage | MinIO | Latest | Self-hosted S3-compatible storage |
-| Alternative | AWS S3 | - | Cloud storage |
-| Database Backup | pg_dump + Cron | - | Automated backups |
-
-### 6. 🧪 Development & Deployment
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Version Control | Git | Latest | Source control |
-| Repository | GitHub | - | Code hosting |
-| Monorepo | pnpm Workspaces | 8.0+ | Multi-package management |
-| CI/CD | GitHub Actions | - | Automated builds and deployments |
-| Containerization | Docker | Latest | Containerized services |
-| Orchestration | Docker Compose | Latest | Multi-container orchestration |
-| Cloud Hosting | AWS / DigitalOcean / Render | - | Hosting platform |
-| SSL/HTTPS | Let's Encrypt + Certbot | - | Free SSL certificates |
-| Error Tracking | Sentry | Latest | Error monitoring |
-| Log Management | ELK Stack (Elasticsearch, Logstash, Kibana) | 8.0+ | Log aggregation |
+* [SultiAI](#-sultiai)
+* [Vision](#-vision)
+* [Core Principle](#-core-principle)
+* [Features](#-features)
+* [Technology Stack](#-technology-stack)
+* [Architecture](#-architecture)
+* [AI Conversation Pipeline](#-ai-conversation-pipeline)
+* [Monorepo Structure](#-monorepo-structure)
+* [Security Architecture](#-security-architecture)
+* [API Design](#-api-design)
+* [Database Design](#-database-design)
+* [Local AI Mode](#-local-ai-mode)
+* [External AI Services](#-external-ai-services)
+* [Cloud + Local Architecture](#-cloud--local-hybrid-architecture)
+* [Original vs Revised Stack](#-original-vs-revised-technology-stack)
+* [Key Benefits](#-key-benefits)
+* [Manuscript Revision Checklist](#-manuscript-revision-checklist)
+* [Setup Guide](#-setup-guide)
+* [Testing](#-testing)
+* [Troubleshooting](#-troubleshooting)
+* [Development Status](#-development-status)
+* [Contributors](#-contributors)
+* [Adviser](#-adviser)
+* [License](#-license)
+* [Contact](#-contact)
 
 ---
 
-### 📁 Monorepo Structure
+# 🎯 Vision
 
+> **To bridge language barriers by providing context-aware AI communication assistance that empowers users to communicate naturally and confidently in real-world situations.**
+
+SultiAI is designed not merely as a translator, but as an intelligent learning companion that supports users while they develop their own communication skills.
+
+---
+
+# 🧭 Core Principle
+
+SultiAI does **not** aim to replace human conversation.
+
+Instead, it empowers users by providing contextual guidance while helping them gradually become more independent and confident speakers.
+
+```text
+                  USER
+                   │
+                   ▼
+             ┌───────────┐
+             │   SPEAK   │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │  ANALYZE  │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │ UNDERSTAND│
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │ RECOMMEND │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │  RESPOND  │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │   LEARN   │
+             └───────────┘
 ```
+
+---
+
+# ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎙️ Real-Time Speech Recognition
+
+Convert spoken conversations into text using speech recognition technology.
+
+</td>
+<td width="50%">
+
+### 🧠 Context Understanding
+
+Analyze conversational intent and context rather than relying only on direct word translation.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+### 💡 AI Response Suggestions
+
+Provide natural response recommendations appropriate for the current situation.
+
+</td>
+<td>
+
+### 🌐 Translation Support
+
+Assist users in understanding unfamiliar words, phrases, and expressions.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+### 👤 AI Avatar Companion
+
+An interactive AI companion designed to make language learning more engaging.
+
+</td>
+<td>
+
+### 📚 Personalized Learning
+
+Adapt language assistance based on user progress and learning preferences.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+### 🌏 Community Learning
+
+Support collaborative language learning and cultural exchange.
+
+</td>
+<td>
+
+### 🎮 Gamified Learning
+
+Use XP, challenges, achievements, and progress tracking to encourage continued practice.
+
+</td>
+</tr>
+</table>
+
+---
+
+# 🛠️ Technology Stack
+
+> **Last Updated: August 2026**
+
+## System Architecture Overview
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT LAYER                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌────────────────┐   ┌────────────────┐   ┌────────────────┐         │
+│   │    Web App     │   │   Mobile App   │   │  Admin Panel   │         │
+│   │     React      │   │ React Native   │   │     React      │         │
+│   └────────────────┘   └────────────────┘   └────────────────┘         │
+│                                                                         │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            API GATEWAY                                  │
+│                                                                         │
+│                    Node.js + Express + TypeScript                       │
+│                                                                         │
+│       Authentication • Validation • Routing • Rate Limiting             │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           SERVICES LAYER                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             │
+│  │ Whisper        │  │ BERT           │  │ Translation    │             │
+│  │ Service        │  │ Service        │  │ Service        │             │
+│  │ Python         │  │ Python         │  │ Python         │             │
+│  └────────────────┘  └────────────────┘  └────────────────┘             │
+│                                                                         │
+└─────────────────────────────────┬───────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                             DATA LAYER                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌────────────────┐   ┌────────────────┐   ┌────────────────┐          │
+│   │  PostgreSQL    │   │     Redis      │   │   MinIO / S3   │          │
+│   │    Primary     │   │ Cache / Queue  │   │     Storage    │          │
+│   └────────────────┘   └────────────────┘   └────────────────┘          │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+# 🖥️ Frontend
+
+| Component        | Technology                         | Version | Purpose                         |
+| ---------------- | ---------------------------------- | ------: | ------------------------------- |
+| Web Framework    | React                              |   18.2+ | Main browser interface          |
+| Mobile Framework | React Native                       |   0.72+ | iOS and Android application     |
+| Shared Core      | TypeScript                         |    5.0+ | Shared business logic and types |
+| State Management | Zustand                            |    4.4+ | Lightweight application state   |
+| Data Fetching    | TanStack Query                     |    4.0+ | Server-state caching            |
+| Web Routing      | React Router DOM                   |   6.18+ | Web navigation                  |
+| Mobile Routing   | React Navigation                   |    6.0+ | Native navigation               |
+| Web Styling      | Tailwind CSS                       |    3.3+ | Utility-first CSS               |
+| Mobile Styling   | NativeWind                         |    4.0+ | Tailwind for React Native       |
+| Web UI           | shadcn/ui                          |  Latest | Accessible components           |
+| Mobile UI        | React Native Paper                 |    5.0+ | Material-style components       |
+| Web Audio        | Web Audio API                      |  Native | Browser audio capture           |
+| Mobile Audio     | react-native-audio-recorder-player |    3.5+ | Mobile recording                |
+| Build Tool       | Vite                               |    4.5+ | Web development and builds      |
+| Mobile Bundler   | Metro                              |   0.76+ | React Native bundling           |
+| Package Manager  | pnpm                               |    8.0+ | Monorepo management             |
+
+---
+
+# 🖥️ Admin Dashboard
+
+| Component      | Technology      | Version | Purpose               |
+| -------------- | --------------- | ------: | --------------------- |
+| Framework      | React           |   18.2+ | Admin dashboard       |
+| Admin Builder  | KratosJS        |  Latest | CRUD/admin generation |
+| UI Components  | shadcn/ui       |  Latest | Consistent interface  |
+| Data Grid      | AG Grid         |   29.0+ | Advanced tables       |
+| Forms          | React Hook Form |   7.47+ | Form handling         |
+| Charts         | Recharts        |    2.8+ | Analytics             |
+| Authentication | JWT + RBAC      |       — | Secure admin access   |
+| API Client     | TanStack Query  |    4.0+ | API data management   |
+
+---
+
+# ⚙️ Backend API
+
+| Component         | Technology         | Version | Purpose                       |
+| ----------------- | ------------------ | ------: | ----------------------------- |
+| Runtime           | Node.js            | 18+ LTS | Server runtime                |
+| Framework         | Express.js         |   4.18+ | REST API                      |
+| Language          | TypeScript         |    5.0+ | Type-safe development         |
+| API Documentation | Swagger/OpenAPI    |     3.0 | API documentation             |
+| Authentication    | JWT                |    9.0+ | Authentication                |
+| Authorization     | Custom RBAC        |       — | Role-based access             |
+| Validation        | Zod                |   3.22+ | Request validation            |
+| Rate Limiting     | express-rate-limit |    6.0+ | Abuse prevention              |
+| Security          | Helmet             |    7.0+ | Security headers              |
+| Logging           | Winston            |   3.11+ | Structured logging            |
+| Metrics           | Prometheus         |  Latest | Application metrics           |
+| Monitoring        | Grafana            |  Latest | Monitoring dashboards         |
+| Queue             | BullMQ             |    4.0+ | Background jobs               |
+| Process Manager   | PM2                |    5.3+ | Production process management |
+
+---
+
+# 🧠 AI Services
+
+| Component          | Technology               | Version | Purpose                           |
+| ------------------ | ------------------------ | ------: | --------------------------------- |
+| Framework          | FastAPI                  |  0.104+ | Python AI API                     |
+| Speech Recognition | OpenAI Whisper           |  Latest | Speech-to-text                    |
+| NLP                | BERT / Hugging Face      |  Latest | Intent and context classification |
+| Translation        | Google Cloud Translation |  Latest | Translation                       |
+| Deep Learning      | PyTorch                  |    2.0+ | Model execution                   |
+| Audio Processing   | librosa                  |   0.10+ | Audio processing                  |
+| Environment        | Conda                    |  Latest | Python dependency management      |
+| Container          | Docker                   |  Latest | AI service isolation              |
+
+---
+
+# 🗄️ Database & Storage
+
+| Component         | Technology     | Version | Purpose                   |
+| ----------------- | -------------- | ------: | ------------------------- |
+| Primary Database  | PostgreSQL     |     15+ | Relational data           |
+| ORM               | Prisma         |      5+ | Type-safe database access |
+| Migration         | Prisma Migrate |      5+ | Database migrations       |
+| Cache             | Redis          |      7+ | Fast caching              |
+| Queue Backend     | Redis          |      7+ | BullMQ backend            |
+| File Storage      | MinIO          |  Latest | S3-compatible storage     |
+| Cloud Alternative | AWS S3         |       — | Cloud object storage      |
+| Backup            | pg_dump + Cron |       — | Database backup           |
+
+---
+
+# 🚀 Development & Deployment
+
+| Component          | Technology                  | Purpose                    |
+| ------------------ | --------------------------- | -------------------------- |
+| Version Control    | Git                         | Source control             |
+| Repository         | GitHub                      | Collaboration              |
+| Monorepo           | pnpm Workspaces             | Multi-package management   |
+| CI/CD              | GitHub Actions              | Automated deployment       |
+| Containerization   | Docker                      | Service isolation          |
+| Orchestration      | Docker Compose              | Multi-container deployment |
+| Cloud              | AWS / DigitalOcean / Render | Hosting                    |
+| SSL                | Let's Encrypt + Certbot     | HTTPS                      |
+| Error Tracking     | Sentry                      | Error monitoring           |
+| Log Management     | ELK Stack                   | Centralized logging        |
+| Process Management | PM2                         | Node.js production         |
+
+---
+
+# 🏗️ Architecture
+
+```text
+                         ┌──────────────────┐
+                         │      USERS       │
+                         └────────┬─────────┘
+                                  │
+                  ┌───────────────┼───────────────┐
+                  │               │               │
+                  ▼               ▼               ▼
+             ┌─────────┐    ┌───────────┐   ┌─────────┐
+             │   WEB   │    │  MOBILE   │   │ ADMIN   │
+             │  React  │    │   React   │   │  React  │
+             └────┬────┘    │  Native   │   └────┬────┘
+                  │         └─────┬─────┘        │
+                  └───────────────┼───────────────┘
+                                  ▼
+                    ┌────────────────────────┐
+                    │      API GATEWAY       │
+                    │ Node.js + Express + TS │
+                    └────────────┬───────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+              ▼                  ▼                  ▼
+       ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+       │ AI SERVICE  │   │ APPLICATION │   │ BACKGROUND  │
+       │   FastAPI   │   │   SERVICE   │   │    JOBS     │
+       │             │   │             │   │   BullMQ    │
+       │ Whisper     │   │ Users       │   │   Redis     │
+       │ BERT        │   │ Conversations│  │             │
+       │ PyTorch     │   │ Learning    │   │             │
+       └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+              │                 │                 │
+              └─────────────────┼─────────────────┘
+                                ▼
+                    ┌────────────────────────┐
+                    │       DATA LAYER       │
+                    ├────────────────────────┤
+                    │ PostgreSQL             │
+                    │ Redis                  │
+                    │ MinIO / S3             │
+                    └────────────────────────┘
+```
+
+---
+
+# 🔄 AI Conversation Pipeline
+
+```text
+🎙️ USER SPEECH
+      │
+      ▼
+┌──────────────────────┐
+│       WHISPER        │
+│    Speech → Text     │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│        BERT          │
+│  Intent + Context    │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│    CONTEXT ENGINE    │
+│ Situation + Meaning  │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ AI RECOMMENDATION    │
+│ Response Suggestions │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ TRANSLATION /        │
+│ EXPLANATION          │
+└──────────┬───────────┘
+           │
+           ▼
+💬 USER RESPONSE
+           │
+           ▼
+📚 LEARNING DATA
+```
+
+---
+
+# 📁 Monorepo Structure
+
+```text
 sultiai/
+│
 ├── packages/
-│   ├── shared/               # Shared TypeScript code
+│   │
+│   ├── shared/
 │   │   ├── src/
-│   │   │   ├── types/        # Shared types and interfaces
-│   │   │   ├── validators/   # Zod schemas (shared with frontend)
-│   │   │   ├── constants/    # Shared constants
-│   │   │   └── utils/        # Shared utilities
+│   │   │   ├── types/
+│   │   │   ├── validators/
+│   │   │   ├── constants/
+│   │   │   └── utils/
 │   │   └── package.json
 │   │
-│   ├── web/                  # React Web App
+│   ├── web/
 │   │   ├── src/
-│   │   │   ├── components/   # UI components
-│   │   │   ├── pages/        # Page components
-│   │   │   ├── hooks/        # Custom React hooks
-│   │   │   ├── contexts/     # React contexts
+│   │   │   ├── components/
+│   │   │   ├── pages/
+│   │   │   ├── hooks/
+│   │   │   ├── contexts/
 │   │   │   └── App.tsx
 │   │   ├── index.html
 │   │   ├── tailwind.config.js
 │   │   ├── vite.config.ts
 │   │   └── package.json
 │   │
-│   ├── mobile/               # React Native App
+│   ├── mobile/
 │   │   ├── src/
-│   │   │   ├── screens/      # Screen components
-│   │   │   ├── components/   # Mobile UI components
-│   │   │   ├── navigation/   # React Navigation config
+│   │   │   ├── screens/
+│   │   │   ├── components/
+│   │   │   ├── navigation/
 │   │   │   └── App.tsx
 │   │   ├── ios/
 │   │   ├── android/
 │   │   ├── metro.config.js
 │   │   └── package.json
 │   │
-│   └── admin/                # Admin Dashboard
+│   └── admin/
 │       ├── src/
-│       │   ├── components/   # Admin components
-│       │   ├── pages/        # Admin pages (using KratosJs)
-│       │   ├── layouts/      # Layout components
+│       │   ├── components/
+│       │   ├── pages/
+│       │   ├── layouts/
 │       │   └── App.tsx
 │       ├── tailwind.config.js
 │       ├── vite.config.ts
 │       └── package.json
 │
-├── backend/                  # Node.js API Server
+├── server/
 │   ├── src/
-│   │   ├── config/          # Configuration
-│   │   ├── controllers/     # Route controllers
-│   │   ├── services/        # Business logic
-│   │   ├── routes/          # Express routes
-│   │   ├── middlewares/     # Express middlewares
-│   │   ├── models/          # Prisma models
-│   │   ├── types/           # TypeScript types
-│   │   ├── utils/           # Utilities
-│   │   └── server.ts        # Entry point
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── services/
+│   │   ├── routes/
+│   │   ├── middlewares/
+│   │   ├── models/
+│   │   ├── types/
+│   │   ├── utils/
+│   │   └── index.ts
 │   ├── prisma/
-│   │   └── schema.prisma    # Database schema
-│   ├── dockerfile
+│   │   └── schema.prisma
+│   ├── .env.example
+│   ├── Dockerfile
 │   └── package.json
 │
-├── ai-service/              # Python AI Service
+├── ai-service/
 │   ├── src/
-│   │   ├── whisper/        # Whisper speech recognition
-│   │   ├── bert/           # BERT intent classification
-│   │   ├── translate/      # Google Translate wrapper
-│   │   └── main.py         # FastAPI entry point
-│   ├── models/             # Pre-trained models
-│   ├── data/               # Phrase repository
+│   │   ├── whisper/
+│   │   ├── bert/
+│   │   ├── translate/
+│   │   └── main.py
+│   ├── models/
+│   ├── data/
 │   ├── requirements.txt
-│   └── dockerfile
+│   └── Dockerfile
 │
-├── docker-compose.yml       # Multi-container setup
-├── .env.example             # Environment variables
-├── package.json             # Root package.json (pnpm workspaces)
+├── docker-compose.yml
+├── package.json
+├── pnpm-workspace.yaml
+├── .env.example
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
 ---
 
-### 🔑 Key Benefits of This Tech Stack
+# 🔐 Security Architecture
 
-1. **Full Ownership** - You control everything; no vendor lock-in
-2. **Custom Admin Dashboard** - Built with KratosJs/Admiral, fully tailored to SultiAI
-3. **Type Safety** - TypeScript + Prisma + Zod from database to frontend
-4. **Shared Code** - Business logic shared between web, mobile, and admin
-5. **Scalability** - PostgreSQL, Redis, and microservices architecture
-6. **Observability** - Full logging, metrics, and error tracking
-7. **Cost Control** - Self-hosted MinIO and PostgreSQL; only pay for compute
-8. **Academic Alignment** - Meets the manuscript's requirement for a "fully developed system"
-
----
-
-## 🌐 Local Mode (No API Keys Required!)
-
-SultiAI can run entirely offline with local ONNX models. No API keys, no external services, no internet required after initial setup.
-
-### Quick Start (Local Mode)
-
-```bash
-# 1. Download local AI models (one-time, ~1GB total)
-cd server && npm run models
-
-# 2. Start the server (no .env or API keys needed!)
-cd server && npm run dev
-
-# 3. Start the frontend
-cd .. && npm start
+```text
+                  ┌─────────────────────┐
+                  │       CLIENT        │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │    HTTPS / CORS     │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │      Helmet         │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │   Rate Limiting     │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │      JWT Auth       │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │       RBAC          │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │   Zod Validation    │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │ Application Service │
+                  └─────────────────────┘
 ```
 
-### Local Models Included
+---
 
-| Model | Size | Purpose |
-|-------|------|---------|
-| TinyLlama 1.1B | ~600MB | Chat responses & language tutoring |
-| Whisper Tiny | ~300MB | Speech-to-text transcription |
-| Windows TTS | Built-in | Character-based voice synthesis |
+# 🔌 API Design
 
-### Character Voices (Local TTS)
+Example API structure:
 
-SultiAI includes 4 character voices powered by Windows built-in TTS (no API needed):
+```text
+/api/v1
+│
+├── /auth
+│   ├── POST /register
+│   ├── POST /login
+│   └── POST /refresh
+│
+├── /users
+│   ├── GET /me
+│   ├── PATCH /me
+│   └── DELETE /me
+│
+├── /speech
+│   └── POST /transcribe
+│
+├── /conversations
+│   ├── GET /
+│   ├── POST /
+│   ├── GET /:id
+│   └── POST /:id/messages
+│
+├── /recommendations
+│   ├── GET /
+│   └── POST /
+│
+├── /learning
+│   ├── GET /progress
+│   ├── GET /modules
+│   └── POST /complete
+│
+└── /admin
+    ├── /users
+    ├── /analytics
+    └── /content
+```
 
-- **Blessica** - Warm, friendly female voice (default Sulti persona)
-- **Angel** - Clear, patient male voice
-- **Sultan** - Authoritative male voice with cultural gravitas
-- **Lola** - Gentle, wise elder female voice
+Example endpoints:
+
+```http
+POST /api/v1/auth/login
+POST /api/v1/auth/register
+
+GET /api/v1/users/me
+
+POST /api/v1/speech/transcribe
+
+GET /api/v1/conversations
+POST /api/v1/conversations
+GET /api/v1/conversations/:id
+POST /api/v1/conversations/:id/messages
+
+GET /api/v1/learning/progress
+GET /api/v1/recommendations
+```
 
 ---
 
-## 📊 Comparison: Original vs Revised Tech Stack
+# 🗃️ Database Design
 
-| Category | Original (Manuscript) | Revised (Final) |
-|----------|----------------------|-----------------|
-| **Web Frontend** | React 18 | React 18 (keep) |
-| **Mobile** | Not specified | React Native + Shared Core |
-| **State Management** | Redux Toolkit | Zustand (simpler) |
-| **Data Fetching** | Axios | TanStack Query (caching + state) |
-| **Admin Dashboard** | None / Firebase Console | Custom React + KratosJs |
-| **Backend** | Node.js + Express | Node.js + Express + TypeScript |
-| **Database** | Firebase Firestore | PostgreSQL + Prisma |
-| **Cache/Queue** | Firebase | Redis + BullMQ |
-| **File Storage** | Firebase Storage | MinIO / AWS S3 |
-| **Auth** | Firebase Auth | Custom JWT + RBAC |
-| **API Validation** | Manual | Zod (shared schemas) |
-| **AI Services** | Python scripts (spawn) | FastAPI microservice + Docker |
-| **Logging/Monitoring** | None | Winston + Prometheus + Grafana |
-| **Deployment** | Render/Manual | Docker Compose + GitHub Actions |
-| **Package Manager** | npm | pnpm (monorepo) |
+Core PostgreSQL entities:
 
----
-
-## 📑 Manuscript Revision Checklist
-
-*Clicking this tab takes you to the specific list of chapters that must be updated in your Capstone Manuscript to match the new Tech Stack.*
-
-Here is the breakdown of exactly where you need to update your manuscript and what to write in those sections to align with your revised stack.
-
----
-
-### 📖 Chapter 2: Review of Related Literature and Studies (RRLS)
-**What to revise:** You need to update your literature to support *why* you chose these specific technologies over the older ones (like Firebase).
-*   **Add literature on:** 
-    *   **Monorepo architectures (pnpm workspaces)** and shared TypeScript code benefits.
-    *   **Zustand vs. Redux** (state management efficiency).
-    *   **PostgreSQL + Prisma vs. NoSQL/Firebase** (why relational databases are better for your conversational data).
-    *   **TanStack Query** for efficient data fetching and caching.
-    *   **Whisper and BERT** (Hugging Face) for real-time speech-to-text and intent classification.
-
-### 📖 Chapter 3: Technical Background / System Architecture
-**What to revise:** This is the most critical chapter. You must replace your old architectural diagrams with the new ones.
-*   **The Diagram:** Remove the old Firebase/Firestore flowchart. Replace it with the **Architecture Diagram** I provided in the README (The `Client Layer` -> `API Gateway` -> `Services Layer` -> `Data Layer` flowchart).
-*   **The Text:** Describe how the data flows:
-    1.  *Web/Mobile* sends audio -> *API Gateway (Node.js)*.
-    2.  Gateway routes to *AI Service (Python)*.
-    3.  Python uses *Whisper* for speech and *BERT* for context.
-    4.  Data is stored in *PostgreSQL*; fast sessions are cached in *Redis*.
-    5.  Media files are stored in *MinIO*.
-
-### 📖 Chapter 3: Methodology / System Development
-**What to revise:** You need to update your "Development Tools" and "Software Requirements" tables. 
-*   **Create a new table** that includes:
-    *   **Frontend:** React 18, React Native, Zustand, TanStack Query.
-    *   **Backend:** Node.js (LTS), Express, TypeScript, Prisma.
-    *   **AI/ML:** Python, FastAPI, Whisper, PyTorch.
-    *   **Database:** PostgreSQL, Redis.
-    *   **DevOps:** Docker, GitHub Actions, MinIO.
-    *   *Note: State that you are using **pnpm** for monorepo management.*
-
-### 📖 Chapter 4: System Design and Architecture
-**What to revise:** You need to update your **Database Design** and **API Design** sections.
-*   **Database Design:** Remove the Firebase JSON structure. Create a **Relational Database Schema (ERD)** for PostgreSQL. Include tables for:
-    *   `Users`, `ConversationSessions`, `Messages`, `UserPreferences`, `PhraseRecommendations`.
-*   **API Design:** Update your API endpoints to match the Node.js + Express structure (e.g., `POST /api/v1/speech/transcribe`, `GET /api/v1/conversations/:id`).
-
-### 📖 Chapter 5: Implementation, Testing, and Deployment
-**What to revise:** The deployment strategy. You wrote "Render/Manual" in your original stack. That needs to change.
-*   **Update to:** "The system will be containerized using **Docker** and orchestrated using **Docker Compose**. Continuous Integration and Continuous Deployment (CI/CD) will be automated via **GitHub Actions**."
-*   **Testing:** Add that you will use Postman to test the API and Jest for unit testing.
-
-### 📖 Chapter 8: Conclusion and Recommendations (or similar final chapter)
-**What to revise:** Your **"Future Recommendations"** section.
-*   **Add a recommendation:** *"Future researchers could explore deploying the AI services to cloud GPU instances to reduce latency."*
-*   **Add recommendation:** *"Expand the system by adding a user-admin role using the custom RBAC (Role-Based Access Control)."*
+```text
+┌──────────────────────┐
+│        Users         │
+├──────────────────────┤
+│ id                   │
+│ email                │
+│ password_hash        │
+│ role                 │
+│ created_at           │
+└──────────┬───────────┘
+           │
+           ├─────────────────────┐
+           │                     │
+           ▼                     ▼
+┌──────────────────────┐ ┌────────────────────────┐
+│   UserPreferences    │ │ ConversationSessions   │
+├──────────────────────┤ ├────────────────────────┤
+│ id                   │ │ id                     │
+│ user_id              │ │ user_id                │
+│ language             │ │ context                │
+│ level                │ │ started_at             │
+└──────────────────────┘ └───────────┬────────────┘
+                                     │
+                                     ▼
+                            ┌─────────────────┐
+                            │    Messages     │
+                            ├─────────────────┤
+                            │ id              │
+                            │ session_id      │
+                            │ sender          │
+                            │ content         │
+                            │ created_at      │
+                            └────────┬────────┘
+                                     │
+                                     ▼
+                         ┌────────────────────────┐
+                         │ PhraseRecommendations │
+                         ├────────────────────────┤
+                         │ id                     │
+                         │ message_id             │
+                         │ phrase                 │
+                         │ explanation            │
+                         │ confidence              │
+                         └────────────────────────┘
+```
 
 ---
 
-### 💡 Important Academic Tip for the Manuscript:
+# 📴 Local AI Mode
 
-When you write your manuscript, **do not** put the extensive tables (like "Frontend Framework: React 18.2+") directly in the main body of your thesis. 
+SultiAI is designed to support a local AI configuration where selected AI capabilities can operate without external API services.
 
-**How to format it instead:**
-1. Place the **complete, detailed tables** in your **Appendices** (Appendix A: Full Technical Stack Specification).
-2. In the **Main Body (Chapter 3)**, write a summary paragraph like this: 
-   > *"The SultiAI system utilizes a modern, multi-tier architecture. The frontend is built using **React (Web)** and **React Native (Mobile)** with **Zustand** for state management. The backend is powered by **Node.js** and **Express**, while the AI services are handled by a **Python FastAPI** microservice utilizing **OpenAI Whisper** and **BERT**. Data persistence is managed by **PostgreSQL** with **Redis** caching. For a complete breakdown of versions and tools, refer to Appendix A."*
+### Benefits
 
-This shows your professor that you thoroughly planned the stack without cluttering the actual paper with massive technical lists.
+* No external API dependency for supported features
+* Reduced recurring API costs
+* Better privacy for locally processed data
+* Offline-capable workflows
+* Local inference
 
----
+### Example Local Models
 
-## 📈 Development Status
+| Model          | Approximate Size | Purpose                  |
+| -------------- | ---------------: | ------------------------ |
+| TinyLlama 1.1B |          ~600 MB | Local language responses |
+| Whisper Tiny   |          ~300 MB | Speech-to-text           |
+| Windows TTS    |         Built-in | Local voice synthesis    |
 
-**Current Phase:** Capstone 1
-
-Currently under research, planning, UI design, and system architecture.
-
-**Next Phases:**
-- Capstone 2: Development and Implementation
-- Capstone 3: Testing and Deployment
-
----
-
-## 👥 Contributors
-
-**Team 5**
-
-- Kevin Albert Nisperos
-- Genesis Diaz
-- Jevan Adam Mulato
+> Local mode and cloud/API-assisted mode are separate configurations. Features requiring external services require their corresponding credentials.
 
 ---
 
-## 👨‍🏫 Adviser
+# 🎙️ Character Voices
 
-Ryan N. Billera, LPT
+| Character    | Voice Style        | Personality                       |
+| ------------ | ------------------ | --------------------------------- |
+| **Blessica** | Warm female        | Friendly and approachable         |
+| **Angel**    | Clear male         | Patient and supportive            |
+| **Sultan**   | Authoritative male | Confident and culturally grounded |
+| **Lola**     | Gentle female      | Wise and encouraging              |
 
 ---
 
-## 📄 License
+# 🔌 External AI Services
 
+## Groq
+
+Used for fast language-model inference where enabled by the backend.
+
+```env
+GROQ_API_KEY=your_groq_api_key
+```
+
+## xAI Voice Mode
+
+Voice Mode can connect to a realtime xAI voice session.
+
+```env
+XAI_API_KEY=your_xai_api_key
+XAI_VOICE_MODEL=grok-voice-latest
+XAI_VOICE=eve
+```
+
+External AI services are optional depending on the deployment configuration.
+
+---
+
+# 🔄 Cloud + Local Hybrid Architecture
+
+```text
+                         SULTIAI CLIENT
+                               │
+                               ▼
+                         NODE.JS API
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+                ▼                             ▼
+         ┌───────────────┐             ┌───────────────┐
+         │   LOCAL AI    │             │   CLOUD AI    │
+         └───────┬───────┘             └───────┬───────┘
+                 │                             │
+          ┌──────┴──────┐              ┌───────┴──────┐
+          │             │              │              │
+          ▼             ▼              ▼              ▼
+       Whisper       Local LLM       Groq            xAI
+          │             │              │              │
+          └─────────────┴──────────────┴──────────────┘
+                                │
+                                ▼
+                         APPLICATION DATA
+                                │
+                   ┌────────────┼────────────┐
+                   ▼            ▼            ▼
+              PostgreSQL      Redis       MinIO/S3
+```
+
+---
+
+# 📊 Original vs Revised Technology Stack
+
+| Category           | Original           | Revised                        |
+| ------------------ | ------------------ | ------------------------------ |
+| Web Frontend       | React 18           | React 18 + Vite                |
+| Mobile             | Not specified      | React Native                   |
+| State Management   | Redux Toolkit      | Zustand                        |
+| Data Fetching      | Axios              | TanStack Query                 |
+| Admin Dashboard    | Firebase Console   | Custom React Admin             |
+| Backend            | Node.js + Express  | Node.js + Express + TypeScript |
+| Database           | Firebase Firestore | PostgreSQL + Prisma            |
+| Cache              | Firebase           | Redis                          |
+| Queue              | —                  | BullMQ                         |
+| File Storage       | Firebase Storage   | MinIO / AWS S3                 |
+| Authentication     | Firebase Auth      | JWT + RBAC                     |
+| Validation         | Manual             | Zod                            |
+| AI Services        | Python scripts     | FastAPI microservice           |
+| Speech Recognition | Whisper            | Whisper                        |
+| NLP                | Python NLP         | BERT / Hugging Face            |
+| Deployment         | Render / Manual    | Docker + Docker Compose        |
+| CI/CD              | —                  | GitHub Actions                 |
+| Logging            | Basic              | Winston + ELK                  |
+| Monitoring         | —                  | Prometheus + Grafana           |
+| Package Manager    | npm                | pnpm Workspaces                |
+
+---
+
+# 🌟 Key Benefits
+
+### 1. Full Ownership
+
+The architecture reduces dependency on a single vendor and gives the team greater control over infrastructure.
+
+### 2. Type Safety
+
+TypeScript, Prisma, and Zod provide stronger type and validation guarantees.
+
+### 3. Shared Code
+
+The monorepo architecture allows shared types, validators, constants, and utilities.
+
+### 4. Scalability
+
+PostgreSQL, Redis, BullMQ, and separated services provide a foundation for future scaling.
+
+### 5. Observability
+
+Winston, Prometheus, Grafana, Sentry, and ELK can provide application visibility.
+
+### 6. Cost Control
+
+Local models and self-hosted infrastructure can reduce recurring API and storage costs.
+
+### 7. Academic Alignment
+
+The architecture clearly separates presentation, application logic, AI processing, persistence, and infrastructure.
+
+---
+
+# 📑 Manuscript Revision Checklist
+
+## Chapter 2 — Review of Related Literature and Studies
+
+Update the literature review to support the technologies selected for the revised architecture.
+
+Recommended areas:
+
+* Monorepo architecture
+* pnpm Workspaces
+* Shared TypeScript code
+* Zustand
+* TanStack Query
+* PostgreSQL
+* Prisma ORM
+* Redis
+* Whisper speech recognition
+* BERT
+* FastAPI
+* Docker
+* AI-assisted language learning
+
+The literature should explain **why each technology is appropriate for SultiAI** rather than simply listing the technology.
+
+---
+
+# 📖 Chapter 3 — Technical Background / System Architecture
+
+Replace the old Firebase-centered architecture with the revised multi-tier architecture.
+
+Recommended flow:
+
+```text
+Web / Mobile / Admin
+        ↓
+Node.js + Express API
+        ↓
+Python FastAPI AI Service
+        ↓
+Whisper + BERT
+        ↓
+Context + Recommendation
+        ↓
+PostgreSQL + Redis + MinIO
+```
+
+---
+
+# 🧰 Chapter 3 — Development Tools
+
+Recommended summary table:
+
+| Category           | Technologies                            |
+| ------------------ | --------------------------------------- |
+| Frontend           | React, React Native, TypeScript         |
+| State              | Zustand                                 |
+| Data Fetching      | TanStack Query                          |
+| Backend            | Node.js, Express, TypeScript            |
+| AI/ML              | Python, FastAPI, Whisper, BERT, PyTorch |
+| Database           | PostgreSQL, Prisma                      |
+| Cache              | Redis                                   |
+| Storage            | MinIO                                   |
+| DevOps             | Docker, Docker Compose                  |
+| CI/CD              | GitHub Actions                          |
+| Package Management | pnpm                                    |
+
+---
+
+# 🏛️ Chapter 4 — System Design
+
+## Database Design
+
+Replace Firebase/Firestore structures with a relational PostgreSQL schema.
+
+Recommended core entities:
+
+* `Users`
+* `UserPreferences`
+* `ConversationSessions`
+* `Messages`
+* `PhraseRecommendations`
+* `LearningProgress`
+* `LearningModules`
+* `Achievements`
+* `Notifications`
+
+## API Design
+
+Document endpoints such as:
+
+```http
+POST /api/v1/auth/login
+POST /api/v1/auth/register
+
+GET /api/v1/users/me
+
+POST /api/v1/speech/transcribe
+
+GET /api/v1/conversations
+POST /api/v1/conversations
+GET /api/v1/conversations/:id
+POST /api/v1/conversations/:id/messages
+
+GET /api/v1/learning/progress
+GET /api/v1/recommendations
+```
+
+---
+
+# 🧪 Chapter 5 — Implementation, Testing & Deployment
+
+Update the deployment strategy to include:
+
+* Docker
+* Docker Compose
+* GitHub Actions
+* PostgreSQL
+* Redis
+* MinIO
+* FastAPI
+* Node.js
+* React
+* React Native
+
+### Testing Tools
+
+```text
+Frontend
+├── Jest
+├── React Testing Library
+└── ESLint
+
+Backend
+├── Jest
+├── Supertest
+└── Postman
+
+AI Service
+├── Pytest
+└── FastAPI TestClient
+
+System
+└── Integration Testing
+```
+
+---
+
+# 📈 Chapter 8 — Recommendations
+
+Potential future recommendations:
+
+1. Deploy AI services to GPU-enabled cloud infrastructure to reduce inference latency.
+2. Expand custom RBAC with additional administrative roles.
+3. Improve local model performance through quantization and optimization.
+4. Expand regional language and dialect datasets.
+5. Improve speech recognition for local accents and pronunciation.
+6. Add more AI-assisted pronunciation feedback.
+7. Expand cultural learning modules.
+8. Explore privacy-preserving on-device AI inference.
+
+---
+
+# 🚀 Setup Guide
+
+## Requirements
+
+Install the following:
+
+* Node.js 18+
+* pnpm 8+
+* Python 3.10+
+* Git
+* Docker
+* Docker Compose
+* PostgreSQL
+* Redis
+
+For mobile development:
+
+* Android Studio and/or
+* Xcode on macOS
+* Expo tooling where applicable
+
+---
+
+## 1. Clone the Repository
+
+```bash
+git clone https://github.com/Git-coder-err/SultiAI.git
+cd SultiAI
+```
+
+---
+
+## 2. Install Dependencies
+
+```bash
+pnpm install
+```
+
+---
+
+## 3. Configure Environment Variables
+
+Create the root environment file:
+
+```bash
+cp .env.example .env
+```
+
+Create the server environment:
+
+```bash
+cp server/.env.example server/.env
+```
+
+Example:
+
+```env
+PORT=3001
+
+JWT_SECRET=your_secure_secret
+
+DATABASE_URL=postgresql://postgres:password@localhost:5432/sultiai
+
+REDIS_URL=redis://localhost:6379
+
+GROQ_API_KEY=your_groq_api_key
+
+XAI_API_KEY=your_xai_api_key
+XAI_VOICE_MODEL=grok-voice-latest
+XAI_VOICE=eve
+```
+
+Only configure external AI keys for features that require them.
+
+---
+
+# ⚙️ Backend
+
+The supported backend is the TypeScript Express server:
+
+```text
+server/
+└── src/
+    └── index.ts
+```
+
+Start from the repository root:
+
+```bash
+pnpm run server:dev
+```
+
+Or:
+
+```bash
+cd server
+pnpm install
+pnpm run dev
+```
+
+Health check:
+
+```text
+http://localhost:3001/api/health
+```
+
+> Do not use a legacy `server/index.js` stub. The supported backend entry point is the TypeScript server.
+
+---
+
+# 🗄️ Database Setup
+
+Configure PostgreSQL:
+
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/sultiai
+```
+
+Run Prisma:
+
+```bash
+cd server
+
+pnpm prisma generate
+pnpm prisma migrate dev
+```
+
+Open Prisma Studio:
+
+```bash
+pnpm prisma studio
+```
+
+---
+
+# 🧠 AI Service Setup
+
+Navigate to:
+
+```bash
+cd ai-service
+```
+
+Create a Conda environment:
+
+```bash
+conda create -n sultiai python=3.10
+conda activate sultiai
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start FastAPI:
+
+```bash
+uvicorn src.main:app --reload --port 8000
+```
+
+Open API documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+# 🐳 Docker Setup
+
+Build services:
+
+```bash
+docker compose build
+```
+
+Start:
+
+```bash
+docker compose up
+```
+
+Start in detached mode:
+
+```bash
+docker compose up -d
+```
+
+View logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+---
+
+# 📱 Mobile Development
+
+For Expo:
+
+```bash
+pnpm expo start
+```
+
+Android:
+
+```bash
+pnpm expo run:android
+```
+
+iOS:
+
+```bash
+pnpm expo run:ios
+```
+
+---
+
+# 📡 Physical Device Configuration
+
+Set:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_BACKEND_IP:3001
+```
+
+Example:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.100:3001
+```
+
+Ensure:
+
+* Backend is running.
+* Device and computer are on the same network.
+* Port `3001` is accessible.
+* Firewall permits traffic.
+* PostgreSQL is running.
+* Redis is running.
+
+---
+
+# 🖥️ Emulator / Simulator
+
+### Android Emulator
+
+Use:
+
+```text
+http://10.0.2.2:3001
+```
+
+### iOS Simulator
+
+Usually:
+
+```text
+http://localhost:3001
+```
+
+---
+
+# 🧪 Testing
+
+Run tests:
+
+```bash
+pnpm test
+```
+
+Run lint:
+
+```bash
+pnpm lint
+```
+
+Run type checking:
+
+```bash
+pnpm typecheck
+```
+
+For API testing, use Postman or another REST client.
+
+Health endpoint:
+
+```http
+GET http://localhost:3001/api/health
+```
+
+---
+
+# 🔧 Troubleshooting
+
+## Backend Connection Failed
+
+Check:
+
+```bash
+curl http://localhost:3001/api/health
+```
+
+---
+
+## Find Local IP Address
+
+Windows:
+
+```bash
+ipconfig
+```
+
+macOS/Linux:
+
+```bash
+ifconfig
+```
+
+Use the local IPv4 address:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_IP:3001
+```
+
+---
+
+## Android Emulator Cannot Connect
+
+Use:
+
+```text
+http://10.0.2.2:3001
+```
+
+instead of:
+
+```text
+http://localhost:3001
+```
+
+---
+
+## Database Connection Failed
+
+Verify:
+
+* PostgreSQL is running.
+* Database exists.
+* `DATABASE_URL` is correct.
+* Prisma migrations are applied.
+
+---
+
+## Redis Connection Failed
+
+Test:
+
+```bash
+redis-cli ping
+```
+
+Expected:
+
+```text
+PONG
+```
+
+---
+
+## Physical Device Cannot Connect
+
+Check:
+
+1. Phone and computer are connected to the same Wi-Fi.
+2. Backend is listening on port `3001`.
+3. Windows Firewall allows port `3001`.
+4. `EXPO_PUBLIC_API_URL` uses the computer's LAN IP.
+5. The backend is not bound only to `localhost`.
+
+---
+
+# 📊 Development Status
+
+<div align="center">
+
+![Development Status](https://img.shields.io/badge/Development-In%20Progress-5B5FEF?style=for-the-badge)
+
+</div>
+
+## Current Phase
+
+### Capstone 1 — Research, Planning & System Architecture
+
+Current activities:
+
+* Research
+* Manuscript development
+* Technology selection
+* System architecture
+* UI/UX design
+* Database planning
+* AI pipeline planning
+* API architecture
+
+## Upcoming Phases
+
+```text
+┌──────────────────────────┐
+│       CAPSTONE 1         │
+│ Research & Architecture  │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│       CAPSTONE 2         │
+│ Development & Implement. │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│       CAPSTONE 3         │
+│ Testing & Deployment     │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│      FINAL SYSTEM        │
+└──────────────────────────┘
+```
+
+---
+
+# 👥 Contributors
+
+## Team 5
+
+| Member                    | Role      |
+| ------------------------- | --------- |
+| **Kevin Albert Nisperos** | Developer |
+| **Genesis Diaz**          | Developer |
+| **Jevan Adam Mulato**     | Developer |
+
+---
+
+# 👨‍🏫 Adviser
+
+**Ryan N. Billera, LPT**
+
+---
+
+# 📄 License
+
+SultiAI is released under the **MIT License**.
+
+[![License](https://img.shields.io/badge/License-MIT-success?style=for-the-badge)](./LICENSE)
+
+The complete license is available in the repository:
+
+**[`LICENSE`](./LICENSE)**
+
+```text
 MIT License
 
 Copyright (c) 2026 Team 5 - SultiAI
@@ -470,128 +1542,103 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
 
 ---
 
-## 🔧 Setup Guide for Other Devices / Collaborators
+# 📞 Contact
 
-This section provides instructions for collaborators and other devices to set up and configure the SultiAI application to work with a shared backend server.
-
-## Backend (required)
-
-The supported API is the TypeScript Express server under `server/` (`server/src/index.ts`).
-
-```bash
-# From repo root (recommended)
-npm run server:dev
-
-# Or from the server package
-cd server
-npm install
-cp .env.example .env   # then set GROQ_API_KEY and JWT_SECRET
-npm run dev            # hot reload via tsx
-# npm start            # runs compiled dist/index.js
-```
-
-Health check: `http://localhost:3001/api/health`
-
-Do not use a plain `server/index.js` stub — that path is not part of the supported stack.
-
-## 1. Set Up the `server/.env` File with Your GROQ_API_KEY
-
-Create a `.env` file in the server directory (if it doesn't already exist). Copy from the example and add your Groq API key:
-
-```bash
-cp server/.env.example server/.env
-# Edit server/.env and set GROQ_API_KEY and JWT_SECRET
-```
-
-## 1b. xAI (Voice Mode realtime speech-to-speech)
-
-Voice Mode streams your mic straight to an xAI Grok voice session (`/api/agent/token` mints a short-lived client secret; the app connects to `wss://api.x.ai/v1/realtime?model=grok-voice-latest`).
-
-- Add `XAI_API_KEY` to `server/.env` (from https://console.x.ai/api-keys).
-- **The xAI team must have credits/license before any xAI call will succeed** (403 `{"code":"The caller does not have permission..."}` otherwise). Buy credits at https://console.x.ai/team/ebd335d6-6bf0-4ee1-8536-17534eaac939.
-- Optional overrides: `XAI_VOICE_MODEL` (default `grok-voice-latest`), `XAI_VOICE` (default `eve`).
-- Smoke check once credits are added: `POST /v1/tts` or `GET /api/agent/status` from the app.
-- If xAI is unavailable, the voice screen's text chips still fall back to Groq chat + TTS.
-
-## 2. Point the App to the Backend IP Address
-
-When running on physical devices or other local setups, you'll need to configure the app to connect to your backend server.
-
-#### For Expo Development Build
-
-Set the `EXPO_PUBLIC_API_URL` environment variable in your Expo development build configuration:
-
-**Android:**
-```bash
-EXPO_PUBLIC_API_URL=http://YOUR_DEVICE_IP:3001 npx expo run:android
-```
-
-**iOS:**
-```bash
-EXPO_PUBLIC_API_URL=http://YOUR_DEVICE_IP:3001 npx expo run:ios
-```
-
-Replace `YOUR_DEVICE_IP` with the actual IP address of the machine running the backend server.
-
-#### For Physical Devices Testing
-
-For physical devices testing, you'll need to use the actual IP address of the machine running the backend:
-
-1. Build and install the app on your physical device
-2. Set `EXPO_PUBLIC_API_URL` to `http://YOUR_BACKEND_IP:3001`
-3. Ensure your backend server is running on port 3001 and accessible from the physical device
-
-#### For Emulator/Simulator
-
-For emulator/simulator, you can typically use the default localhost (`http://localhost:3001` or `http://10.0.2.2:3001` for Android Emulator), but you may need to override this if your backend is running on a different machine.
-
-### Common Setup Scenarios
-
-#### Scenario 1: Backend on Same Machine
-- Backend: `http://localhost:3001` (or `http://10.0.2.2:3001` for Android Emulator)
-- App should use: `EXPO_PUBLIC_API_URL=http://localhost:3001` (or `http://10.0.2.2:3001`)
-
-#### Scenario 2: Backend on Different Machine
-- Backend: `http://192.168.1.100:3001` (replace with your machine's IP)
-- App should use: `EXPO_PUBLIC_API_URL=http://192.168.1.100:3001`
-
-### Troubleshooting
-
-- **Connection Failed**: Ensure your backend server is running and accessible from the device
-- **Wrong IP**: Use `ipconfig` (Windows) or `ifconfig` (macOS/Linux) to find your machine's IP address
-- **Port Issues**: Verify the backend is listening on port 3001
-- **Firewall**: Ensure firewall rules allow traffic on port 3001
-- **Database Connection**: Ensure PostgreSQL is running and accessible
-- **Redis Connection**: Ensure Redis is running for caching and queue jobs
+For questions, collaboration, or project-related inquiries, please reach out to the SultiAI development team.
 
 ---
 
-## 📞 Contact
+# 🌏 Why SultiAI?
 
-For questions or contributions, please reach out to the development team.
+Language learning is not only about memorizing vocabulary.
+
+Real communication requires understanding:
+
+* Context
+* Tone
+* Situation
+* Intent
+* Cultural meaning
+* Appropriate responses
+
+SultiAI is designed around this principle.
+
+```text
+              TRADITIONAL TRANSLATOR
+
+                    WORD
+                     │
+                     ▼
+                TRANSLATION
+                     │
+                     ▼
+                   RESULT
+
+
+                       VS
+
+
+                     SULTIAI
+
+                    SPEECH
+                      │
+                      ▼
+                   CONTEXT
+                      │
+                      ▼
+                    INTENT
+                      │
+                      ▼
+                  SITUATION
+                      │
+                      ▼
+                RECOMMENDATION
+                      │
+                      ▼
+                   LEARNING
+                      │
+                      ▼
+                  CONFIDENCE
+```
 
 ---
+
+# 💜 Built for Communication
+
+<div align="center">
+
+### Speak naturally.
+
+### Learn continuously.
+
+### Understand the culture.
+
+### Communicate confidently.
+
+<br>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0D9488,50:2563EB,100:5B5FEF&height=140&section=footer&animation=twinkling" width="100%"/>
+
+<br>
+
+<img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=18&duration=3500&pause=1000&color=0D9488&center=true&vCenter=true&width=650&lines=Built+with+%E2%9D%A4%EF%B8%8F+by+Team+5;SultiAI+%E2%80%94+AI+Language+Companion;Learn+%E2%80%A2+Speak+%E2%80%A2+Understand+%E2%80%A2+Connect" alt="Footer typing animation"/>
+
+<br><br>
+
+![GitHub](https://img.shields.io/badge/GitHub-SultiAI-181717?style=flat-square\&logo=github)
+![Made in Davao](https://img.shields.io/badge/Made%20in-Davao%20City-5B5FEF?style=flat-square)
+![Year](https://img.shields.io/badge/2026-Project-0D9488?style=flat-square)
+
+<br><br>
+
+**SultiAI — AI Language Companion for Context-Aware Communication**
+
+<br>
 
 *Last Updated: August 2026*
 
----
-
-## ✅ Summary of Changes Made to README.md
-
-1. **Added Table of Contents** - For easy navigation
-2. **Added "Revised Full Tech Stack" Section** - Complete with:
-   - System Architecture Diagram
-   - 6 Comprehensive Technology Tables
-   - Monorepo Structure
-   - Key Benefits
-   - Original vs Revised Comparison Table
-3. **Reorganized Sections** - Better flow and readability
-4. **Enhanced License Section** - Full MIT license text
-5. **Improved Setup Guide** - More detailed and organized
-6. **Added Development Status** - Clear phase indication
-7. **Added Contact Section** - For collaboration inquiries
-8. **Added "Manuscript Revision Checklist" Section** - This provides a detailed, chapter-by-chapter breakdown of what needs to be changed in the academic paper to align with the new stack.
-```
+</div>
