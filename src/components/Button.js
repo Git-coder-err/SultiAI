@@ -59,19 +59,28 @@ export default function Button({
   );
 
   const renderBtn = () => {
-    if (gradient && variant === 'primary') {
-      const gradColors = [colors.primary, colors.primaryDark];
+    if ((gradient && variant === 'primary') || variant === 'premium') {
+      const gradColors = variant === 'premium' ? [colors.primary, colors.secondary] : [colors.primary, colors.primaryDark];
       return (
-        <LinearGradient colors={gradColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.base, isSmall && styles.small, isLarge && styles.large, fullWidth && styles.fullWidth, { borderRadius: borderRadius.lg }]}>
-          {content}
-        </LinearGradient>
-      );
-    }
-    if (variant === 'premium') {
-      return (
-        <LinearGradient colors={[colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.base, isSmall && styles.small, isLarge && styles.large, fullWidth && styles.fullWidth, { borderRadius: borderRadius.lg, ...shadows.md }]}>
-          {content}
-        </LinearGradient>
+        <Animated.View style={{ transform: [{ scale: scaleAnim }], borderRadius: borderRadius.lg }}>
+          <TouchableOpacity
+            onPress={onPress}
+            disabled={disabled || loading}
+            activeOpacity={0.9}
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            style={[{ borderRadius: borderRadius.lg }, fullWidth && styles.fullWidth, disabled && styles.disabled]}
+          >
+            <LinearGradient
+              colors={gradColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.base, isSmall && styles.small, isLarge && styles.large, fullWidth && styles.fullWidth, { borderRadius: borderRadius.lg }, variant === 'premium' && shadows.md]}
+            >
+              {content}
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
       );
     }
     return (

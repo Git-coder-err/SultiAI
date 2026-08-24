@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authRateLimit } from '../middleware/rateLimit';
 import { validate, validators } from '../middleware/validate';
-import { signUp, signIn, refreshToken, signOut } from '../controllers/auth.controller';
+import { signUp, signIn, refreshToken, signOut, clerkSync } from '../controllers/auth.controller';
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.post('/signin', authRateLimit, validate([
   { field: 'password', validators: [validators.required(), validators.string()] },
 ]), signIn);
 
+router.post('/clerk-sync', authRateLimit, clerkSync);
 router.post('/refresh', authRateLimit, refreshToken);
 router.post('/signout', signOut);
 

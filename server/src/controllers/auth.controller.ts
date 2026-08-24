@@ -128,6 +128,71 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function clerkSync(req: Request, res: Response): Promise<void> {
+  try {
+    const { clerkId, clerkToken, email, name, avatar } = req.body || {};
+    if (!clerkId) {
+      errors.validation(res, 'clerkId is required');
+      return;
+    }
+
+    const db = getDb();
+
+    // Look up existing user by clerkId stored in a metadata column, or by email
+    let rows: any[] = [];
+    if (email) {
+      rows = await (db as any).select()
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+    }
+
+    let userId: number;
+
+    if (rows.length > 0) {
+      // Existing user — update their info if needed
+      userId = rows[0].userId;
+      const updates: any = {};
+      if (name && name !== rows[0].fullname) updates.fullname = name;
+      if (Object.keys(updates).length > 0) {
+        await (db as any).update(schema.users)
+          .set(updates)
+          .where(eq(schema.users.userId, userId));
+      }
+    } else {
+      // New user — create a lightweight account (no password needed for Clerk users)
+      const fullname = name || 'User';
+      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder, not used for Clerk login
+      const result = await (db as any).insert(schema.users).values({
+        fullname,
+        email: email || `${clerkId}@clerk.sultiai`,
+        passwordHash,
+        createdAt: new Date().toISOString(),
+      });
+      userId = result.lastInsertRowid;
+    }
+
+    // Issue backend JWT so subsequent API calls work
+    const user = rows.length > 0 ? rows[0] : null;
+    const tokens = generateTokenPair({ email: email || `${clerkId}@clerk.sultiai`, userId });
+    await storeRefreshToken(userId, tokens.refreshToken);
+
+    success(res, {
+      user: {
+        id: userId,
+        fullname: user?.fullname || name || 'User',
+        email: email || user?.email,
+        avatarId: user?.avatarId,
+        role: user?.role,
+      },
+      ...tokens,
+    }, 'Clerk user synced');
+  } catch (err) {
+    logger.error('Clerk sync error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to sync Clerk user');
+  }
+}
+
 export async function signOut(req: Request, res: Response): Promise<void> {
   try {
     const { refresh_token } = req.body || {};
