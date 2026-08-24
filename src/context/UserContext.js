@@ -1,6 +1,5 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useContext, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth, useUser as useClerkUser } from '@clerk/expo';
 import { api } from '../services/api';
 
 const UserContext = createContext(null);
@@ -9,102 +8,129 @@ export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const [level, setLevel] = useState(null);
-  const { isSignedIn, getToken, signOut: clerkSignOut } = useAuth();
-  const { user: clerkUser } = useClerkUser();
+  const mountedRef = useRef(true);
 
-  // Sync Clerk auth state with backend
+  // On mount, check for saved token and load profile
   useEffect(() => {
+    let cancelled = false;
+    mountedRef.current = true;
+
     (async () => {
       try {
-        if (isSignedIn && clerkUser) {
-          // Get Clerk JWT token
-          const clerkToken = await getToken();
+        const savedToken = await AsyncStorage.getItem('auth_token');
+        if (!savedToken || cancelled) {
+          setLoading(false);
+          return;
+        }
 
-          // Send to backend to create/sync user and get backend token
-          const res = await api.clerkSync(clerkUser.id, clerkToken, {
-            email: clerkUser.primaryEmailAddress?.emailAddress,
-            name: clerkUser.fullName || clerkUser.firstName || 'User',
-            avatar: clerkUser.imageUrl,
-          });
+        // Set token so API calls work
+        if (!cancelled) setToken(savedToken);
 
-          await AsyncStorage.setItem('auth_token', res.accessToken);
-          setToken(res.accessToken);
-          setUser(res.user || await api.getProfile());
-        } else if (!isSignedIn) {
-          // Check for existing backend token (offline / legacy)
-          const savedToken = await AsyncStorage.getItem('auth_token');
-          if (savedToken) {
-            setToken(savedToken);
-            const profile = await api.getProfile();
+        try {
+          const profile = await api.getProfile();
+          if (!cancelled) {
             setUser(profile);
+            setAuthError(null);
+          }
+        } catch {
+          // Token expired or invalid — clear it
+          await AsyncStorage.removeItem('auth_token');
+          if (!cancelled) {
+            setToken(null);
+            setUser(null);
           }
         }
       } catch (err) {
-        console.warn('[UserContext] Auth sync failed:', err.message);
-        // Try fallback with existing token
-        try {
-          const savedToken = await AsyncStorage.getItem('auth_token');
-          if (savedToken) {
-            setToken(savedToken);
-            const profile = await api.getProfile();
-            setUser(profile);
-          }
-        } catch {
-          await AsyncStorage.removeItem('auth_token');
-        }
+        console.warn('[UserContext] Init error:', err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, [isSignedIn, clerkUser]);
 
-  // Legacy sign-in (non-Clerk) for backward compatibility
-  const signIn = async (email, password) => {
-    const res = await api.signIn(email, password);
-    await AsyncStorage.setItem('auth_token', res.accessToken);
-    setToken(res.accessToken);
-    setUser(await api.getProfile());
-  };
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+    };
+  }, []);
 
-  const signUp = async (email, password, name, native_language, target_language) => {
-    const res = await api.signUp(email, password, name, native_language, target_language);
-    await AsyncStorage.setItem('auth_token', res.accessToken);
-    setToken(res.accessToken);
-    setUser(await api.getProfile());
-  };
-
-  const signOut = async () => {
+  const signIn = useCallback(async (email, password) => {
+    setAuthError(null);
     try {
-      await AsyncStorage.removeItem('auth_token');
+      const res = await api.signIn(email, password);
+      const accessToken = res.accessToken;
+      await AsyncStorage.setItem('auth_token', accessToken);
+      if (res.refreshToken) await AsyncStorage.setItem('auth_refresh_token', res.refreshToken);
+      setToken(accessToken);
+
+      // Fetch full profile
+      const profile = await api.getProfile();
+      setUser(profile);
+      return { success: true };
+    } catch (err) {
+      const message = err?.message || 'Sign in failed. Please try again.';
+      setAuthError(message);
+      return { success: false, error: message };
+    }
+  }, []);
+
+  const signUp = useCallback(async (email, password, name, native_language, target_language) => {
+    setAuthError(null);
+    try {
+      const res = await api.signUp(email, password, name, native_language, target_language);
+      const accessToken = res.accessToken;
+      await AsyncStorage.setItem('auth_token', accessToken);
+      if (res.refreshToken) await AsyncStorage.setItem('auth_refresh_token', res.refreshToken);
+      setToken(accessToken);
+
+      // Fetch full profile
+      const profile = await api.getProfile();
+      setUser(profile);
+      return { success: true };
+    } catch (err) {
+      const message = err?.message || 'Sign up failed. Please try again.';
+      setAuthError(message);
+      return { success: false, error: message };
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      // Tell server to revoke refresh token (best effort)
+      const refreshToken = await AsyncStorage.getItem('auth_refresh_token');
+      if (refreshToken) {
+        api.postData?.('/api/auth/signout', { refresh_token: refreshToken }).catch(() => {});
+      }
+    } catch {}
+
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
     } catch {}
     setToken(null);
     setUser(null);
+    setAuthError(null);
+  }, []);
 
-    // Also sign out from Clerk if signed in
-    if (isSignedIn) {
-      try {
-        await clerkSignOut();
-      } catch {}
-    }
-  };
-
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     try {
       const profile = await api.getProfile();
       setUser(profile);
     } catch {}
-  };
+  }, []);
 
-  const refreshLevel = async () => {
+  const refreshLevel = useCallback(async () => {
     try {
       const lvl = await api.getTutorLevel();
       setLevel(lvl);
     } catch {}
-  };
+  }, []);
 
   return (
-    <UserContext.Provider value={{ user, token, loading, level, refreshLevel, signIn, signUp, signOut, refreshProfile }}>
+    <UserContext.Provider value={{
+      user, token, loading, authError, level,
+      refreshLevel, signIn, signUp, signOut, refreshProfile,
+    }}>
       {children}
     </UserContext.Provider>
   );

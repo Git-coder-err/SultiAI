@@ -138,13 +138,25 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
 
     const db = getDb();
 
-    // Look up existing user by clerkId stored in a metadata column, or by email
-    let rows: any[] = [];
-    if (email) {
+    // 1. Try to find existing user by clerk_id first
+    let rows: any[] = await (db as any).select()
+      .from(schema.users)
+      .where(eq(schema.users.clerkId, clerkId))
+      .limit(1);
+
+    // 2. If not found by clerk_id, try by email
+    if (rows.length === 0 && email) {
       rows = await (db as any).select()
         .from(schema.users)
         .where(eq(schema.users.email, email))
         .limit(1);
+
+      // If found by email, link the clerk_id
+      if (rows.length > 0) {
+        await (db as any).update(schema.users)
+          .set({ clerkId })
+          .where(eq(schema.users.userId, rows[0].userId));
+      }
     }
 
     let userId: number;
@@ -167,6 +179,7 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
         fullname,
         email: email || `${clerkId}@clerk.sultiai`,
         passwordHash,
+        clerkId,
         createdAt: new Date().toISOString(),
       });
       userId = result.lastInsertRowid;

@@ -64,6 +64,7 @@ function initDatabase() {
     { table: 'users', column: 'is_verified', sql: 'ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0' },
     { table: 'users', column: 'is_native_speaker', sql: 'ALTER TABLE users ADD COLUMN is_native_speaker INTEGER DEFAULT 0' },
     { table: 'users', column: 'bio', sql: 'ALTER TABLE users ADD COLUMN bio TEXT' },
+    { table: 'users', column: 'clerk_id', sql: 'ALTER TABLE users ADD COLUMN clerk_id TEXT' },
     { table: 'community_posts', column: 'likes_count', sql: 'ALTER TABLE community_posts ADD COLUMN likes_count INTEGER DEFAULT 0' },
     { table: 'community_posts', column: 'bookmarks_count', sql: 'ALTER TABLE community_posts ADD COLUMN bookmarks_count INTEGER DEFAULT 0' },
     { table: 'community_posts', column: 'is_featured', sql: 'ALTER TABLE community_posts ADD COLUMN is_featured INTEGER DEFAULT 0' },
