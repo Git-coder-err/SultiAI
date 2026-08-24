@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Request, Response } from 'express';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
+import axios from 'axios';
 import { getDb } from '../db/connection';
 import * as schema from '../db/schema-sqlite';
 import { hashPassword, verifyPassword } from '../utils/crypto';
@@ -203,6 +204,110 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
   } catch (err) {
     logger.error('Clerk sync error', { error: (err as Error).message });
     errors.internal(res, 'Failed to sync Clerk user');
+  }
+}
+
+export async function googleSignIn(req: Request, res: Response): Promise<void> {
+  try {
+    const { idToken, email, name, avatar } = req.body || {};
+    if (!idToken) {
+      errors.validation(res, 'idToken is required');
+      return;
+    }
+
+    // Verify the Google ID token by calling Google's tokeninfo endpoint
+    let googleUser: { sub: string; email: string; name?: string; picture?: string };
+    try {
+      const tokenRes = await axios.get(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`
+      );
+      googleUser = tokenRes.data;
+    } catch {
+      errors.unauthorized(res, 'Invalid Google ID token');
+      return;
+    }
+
+    const googleId = googleUser.sub;
+    const userEmail = email || googleUser.email;
+    const userName = name || googleUser.name || 'Google User';
+    const userAvatar = avatar || googleUser.picture;
+
+    if (!googleId) {
+      errors.unauthorized(res, 'Could not verify Google identity');
+      return;
+    }
+
+    const db = getDb();
+
+    // 1. Try to find existing user by google_id
+    let rows: any[] = await (db as any).select()
+      .from(schema.users)
+      .where(eq(schema.users.googleId, googleId))
+      .limit(1);
+
+    // 2. If not found by google_id, try by email
+    if (rows.length === 0 && userEmail) {
+      rows = await (db as any).select()
+        .from(schema.users)
+        .where(eq(schema.users.email, userEmail))
+        .limit(1);
+
+      // Link google_id to existing account
+      if (rows.length > 0) {
+        await (db as any).update(schema.users)
+          .set({ googleId })
+          .where(eq(schema.users.userId, rows[0].userId));
+      }
+    }
+
+    let userId: number;
+    let isNewUser = false;
+
+    if (rows.length > 0) {
+      userId = rows[0].userId;
+      // Update profile info if changed
+      const updates: any = {};
+      if (userName && userName !== rows[0].fullname) updates.fullname = userName;
+      if (userAvatar && userAvatar !== rows[0].avatarImage) updates.avatarImage = userAvatar;
+      if (Object.keys(updates).length > 0) {
+        await (db as any).update(schema.users)
+          .set(updates)
+          .where(eq(schema.users.userId, userId));
+      }
+    } else {
+      // New user — create account
+      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder
+      const result = await (db as any).insert(schema.users).values({
+        fullname: userName,
+        email: userEmail || `${googleId}@google.sultiai`,
+        passwordHash,
+        googleId,
+        avatarImage: userAvatar || null,
+        createdAt: new Date().toISOString(),
+      });
+      userId = result.lastInsertRowid;
+      isNewUser = true;
+    }
+
+    const tokens = generateTokenPair({ email: userEmail || `${googleId}@google.sultiai`, userId });
+    await storeRefreshToken(userId, tokens.refreshToken);
+
+    const updatedUser = rows.length > 0 ? rows[0] : null;
+    success(res, {
+      user: {
+        id: userId,
+        fullname: userName || updatedUser?.fullname,
+        email: userEmail || updatedUser?.email,
+        avatarId: updatedUser?.avatarId,
+        avatarImage: userAvatar || updatedUser?.avatarImage,
+        role: updatedUser?.role || 'user',
+      },
+      ...tokens,
+      isNewUser,
+    }, 'Google sign-in successful');
+  } catch (err) {
+    logger.error('Google sign-in error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to sign in with Google');
   }
 }
 

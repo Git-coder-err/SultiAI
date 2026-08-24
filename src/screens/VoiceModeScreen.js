@@ -890,6 +890,18 @@ export default function VoiceModeScreen({ navigation }) {
       try { session.close(); } catch {}
       voiceSessionRef.current = null;
     }
+    // Save conversation history to server (memory feature)
+    setConversation((prev) => {
+      if (prev.length > 0) {
+        const messages = prev.map((m) => ({ type: m.role === 'user' ? 'user' : 'assistant', text: m.text }));
+        const lang = langRef.current || 'bisaya';
+        const title = `Voice ${lang.charAt(0).toUpperCase() + lang.slice(1)} — ${new Date().toLocaleDateString()}`;
+        api.saveConversation(messages, title).catch((err) => {
+          console.warn('[VoiceMode] Failed to save conversation:', err.message);
+        });
+      }
+      return prev;
+    });
     navigation.goBack();
   }, [audioStreamObj, navigation, closeElevenSession]);
 

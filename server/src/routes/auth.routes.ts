@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authRateLimit } from '../middleware/rateLimit';
 import { validate, validators } from '../middleware/validate';
-import { signUp, signIn, refreshToken, signOut, clerkSync } from '../controllers/auth.controller';
+import { signUp, signIn, refreshToken, signOut, clerkSync, googleSignIn } from '../controllers/auth.controller';
 
 const router = Router();
 
@@ -17,6 +17,7 @@ router.post('/signin', authRateLimit, validate([
 ]), signIn);
 
 router.post('/clerk-sync', authRateLimit, clerkSync);
+router.post('/google', authRateLimit, googleSignIn);
 router.post('/refresh', authRateLimit, refreshToken);
 router.post('/signout', signOut);
 

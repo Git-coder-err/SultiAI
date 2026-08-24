@@ -13,6 +13,7 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   clerkId: text('clerk_id'),
+  googleId: text('google_id'),
   avatarId: integer('avatar_id').default(1),
   preferredLang: text('preferred_lang').default('English'),
   learningLang: text('learning_lang').default('Bisaya'),

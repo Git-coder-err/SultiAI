@@ -27,11 +27,8 @@ const MOCK_DOWNLOADS = [
   { id: 'dl2', title: 'Voice Lessons Pack 1', size: '18 MB', icon: 'musical-notes', color: '#8B5CF6' },
 ];
 
-const MOCK_HISTORY = [
-  { id: 'h1', title: 'Market Roleplay with SULTI', date: 'Jul 20', msgs: 12, icon: 'chatbubbles', color: '#14B8A6' },
-  { id: 'h2', title: 'Pronunciation Lab: Greetings', date: 'Jul 19', msgs: 8, icon: 'mic', color: '#8B5CF6' },
-  { id: 'h3', title: 'Flashcards Review', date: 'Jul 18', msgs: 0, icon: 'layers', color: '#3B82F6' },
-];
+const HISTORY_ICONS = ['chatbubbles', 'mic', 'school', 'book', 'record', 'headset'];
+const HISTORY_COLORS = ['#14B8A6', '#8B5CF6', '#3B82F6', '#F59E0B', '#EF4444', '#10B981'];
 
 const THEME_MODES = [
   { value: 'system', label: 'Natural', icon: 'contrast' },
@@ -61,6 +58,7 @@ export default function ProfileScreen({ navigation }) {
   const [signingOut, setSigningOut] = useState(false);
   const [weeklyActivity, setWeeklyActivity] = useState([]);
   const [moduleMastery, setModuleMastery] = useState([]);
+  const [history, setHistory] = useState([]);
 
   const DAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -96,11 +94,41 @@ export default function ProfileScreen({ navigation }) {
     } catch {}
   };
 
+  const loadHistory = async () => {
+    try {
+      const convos = await api.getHistory();
+      if (Array.isArray(convos) && convos.length) {
+        setHistory(
+          convos.map((c, i) => ({
+            id: c.id || String(i),
+            title: c.title || 'Voice Session',
+            date: c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+            msgs: Array.isArray(c.messages) ? c.messages.length : 0,
+            icon: HISTORY_ICONS[i % HISTORY_ICONS.length],
+            color: HISTORY_COLORS[i % HISTORY_COLORS.length],
+          }))
+        );
+      } else {
+        setHistory([]);
+      }
+    } catch {
+      setHistory([]);
+    }
+  };
+
+  const handleDeleteHistory = async (id) => {
+    try {
+      await api.deleteHistory(id);
+      setHistory((prev) => prev.filter((h) => h.id !== id));
+    } catch {}
+  };
+
   useEffect(() => {
     if (user) { setEditName(user.name || ''); setEditCountry(user.country || ''); }
     loadSettings();
     loadSavedPhrases();
     loadAnalytics();
+    loadHistory();
     Animated.timing(fadeAnim, { toValue: 1, duration: getAnimationDuration(600), useNativeDriver: true }).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -319,11 +347,12 @@ export default function ProfileScreen({ navigation }) {
 
                 <Text style={[styles.sectionHeader, { color: colors.text }]}>More</Text>
                 <View style={styles.quickLinks}>
-                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'History', rows: MOCK_HISTORY, kind: 'history' })}>
+                  <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'History', rows: history, kind: 'history' })}>
                     <View style={[styles.linkIcon, { backgroundColor: colors.primary + '20' }]}>
                       <Ionicons name="time-outline" size={20} color={colors.primary} />
                     </View>
                     <Text style={[styles.linkText, { color: colors.text }]}>History</Text>
+                    {history.length > 0 && <Text style={[styles.linkCount, { color: colors.textLight }]}>{history.length}</Text>}
                     <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.linkRow, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]} onPress={() => setInfoModal({ title: 'Certificates', rows: MOCK_CERTIFICATES, kind: 'cert' })}>
@@ -578,6 +607,12 @@ export default function ProfileScreen({ navigation }) {
                   {`SultiAI respects your privacy.\n\n• Your learning data (XP, streaks, saved phrases) is stored on your device and synced to your account when signed in.\n\n• Voice recordings are processed only to give you pronunciation feedback and are never sold or shared.\n\n• You can delete your saved phrases and account data at any time from the Phrases tab.\n\n• We use encryption for your credentials and never expose your password.`}
                 </Text>
               </ScrollView>
+            ) : infoModal?.kind === 'history' && (!infoModal?.rows || infoModal.rows.length === 0) ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="time-outline" size={48} color={colors.textLight} />
+                <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No conversations yet</Text>
+                <Text style={[styles.emptyDesc, { color: colors.textLight }]}>Your voice practice sessions will appear here.</Text>
+              </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {(infoModal?.rows || []).map((item) => (
@@ -585,6 +620,14 @@ export default function ProfileScreen({ navigation }) {
                     key={item.id}
                     style={[styles.infoRowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     activeOpacity={0.85}
+                    onPress={() => {
+                      if (infoModal.kind === 'history') {
+                        Alert.alert('Delete History', `Delete "${item.title}"?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => handleDeleteHistory(item.id) },
+                        ]);
+                      }
+                    }}
                   >
                     <View style={[styles.infoRowIcon, { backgroundColor: item.color + '20' }]}>
                       <Ionicons name={item.icon} size={18} color={item.color} />
@@ -592,14 +635,18 @@ export default function ProfileScreen({ navigation }) {
                     <View style={styles.infoRowBody}>
                       <Text style={[styles.infoRowTitle, { color: colors.text }]}>{item.title}</Text>
                       {item.date ? (
-                        <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.date}</Text>
+                        <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.date}{item.msgs ? ` \u00b7 ${item.msgs} msgs` : ''}</Text>
                       ) : item.size ? (
                         <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.size}</Text>
                       ) : (
                         <Text style={[styles.infoRowMeta, { color: colors.textSecondary }]}>{item.msgs} messages</Text>
                       )}
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+                    {infoModal.kind === 'history' ? (
+                      <Ionicons name="trash-outline" size={16} color={colors.error} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+                    )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>

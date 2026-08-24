@@ -28,6 +28,8 @@ export const api = {
     request('POST', '/api/auth/signin', { email, password }),
   clerkSync: (clerkId, clerkToken, profile) =>
     request('POST', '/api/auth/clerk-sync', { clerkId, clerkToken, ...profile }),
+  googleSignIn: (idToken, email, name, avatar) =>
+    request('POST', '/api/auth/google', { idToken, email, name, avatar }),
 
   // Profile
   getProfile: () => request('GET', '/api/user/me'),

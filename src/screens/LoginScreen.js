@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, shadows } from '../theme';
+import GoogleSignInButton, { Divider } from '../components/GoogleSignInButton';
+import { useUser } from '../context/UserContext';
 
 function SlideInView({ delay = 0, children, style }) {
   const fade = useRef(new Animated.Value(0)).current;
@@ -27,6 +29,7 @@ function SlideInView({ delay = 0, children, style }) {
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { signInWithGoogle } = useUser();
 
   const logoScale = useRef(new Animated.Value(0.3)).current;
   const heroFade = useRef(new Animated.Value(0)).current;
@@ -98,6 +101,18 @@ export default function LoginScreen({ navigation }) {
         </SlideInView>
 
         <SlideInView delay={400} style={[styles.buttonGroup, { marginBottom: insets.bottom + 16 }]}>
+          <GoogleSignInButton
+            onSuccess={async (idToken) => {
+              const result = await signInWithGoogle(idToken);
+              if (result.success) {
+                // UserContext sets user → AppNavigator auto-switches to Main tabs
+              }
+            }}
+            onError={(err) => console.warn('Google sign-in error:', err)}
+          />
+
+          <Divider colors={colors} />
+
           <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('SignIn')}
             style={[styles.outlineBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="mail-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />

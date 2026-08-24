@@ -55,6 +55,26 @@ export function UserProvider({ children }) {
     };
   }, []);
 
+  const signInWithGoogle = useCallback(async (googleIdToken) => {
+    setAuthError(null);
+    try {
+      const res = await api.googleSignIn(googleIdToken);
+      const accessToken = res.accessToken;
+      await AsyncStorage.setItem('auth_token', accessToken);
+      if (res.refreshToken) await AsyncStorage.setItem('auth_refresh_token', res.refreshToken);
+      setToken(accessToken);
+
+      // Fetch full profile
+      const profile = await api.getProfile();
+      setUser(profile);
+      return { success: true };
+    } catch (err) {
+      const message = err?.message || 'Google sign-in failed. Please try again.';
+      setAuthError(message);
+      return { success: false, error: message };
+    }
+  }, []);
+
   const signIn = useCallback(async (email, password) => {
     setAuthError(null);
     try {
@@ -129,7 +149,7 @@ export function UserProvider({ children }) {
   return (
     <UserContext.Provider value={{
       user, token, loading, authError, level,
-      refreshLevel, signIn, signUp, signOut, refreshProfile,
+      refreshLevel, signIn, signInWithGoogle, signUp, signOut, refreshProfile,
     }}>
       {children}
     </UserContext.Provider>
