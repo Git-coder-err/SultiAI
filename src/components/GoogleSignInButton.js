@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useOAuth } from '@clerk/clerk-expo';
+import { useOAuth } from '@clerk/expo';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useTheme } from '../context/ThemeContext';

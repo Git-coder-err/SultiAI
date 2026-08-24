@@ -2,7 +2,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ClerkProvider } from '@clerk/clerk-expo';
+import { ClerkProvider } from '@clerk/expo';
 import { ConversationProvider } from '@elevenlabs/react-native';
 import { UserProvider } from './src/context/UserContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';

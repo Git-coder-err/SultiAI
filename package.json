@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "@clerk/clerk-expo": "^2.20.0",
+    "@clerk/expo": "^4.5.2",
     "@elevenlabs/react-native": "^1.2.23",
     "@expo/vector-icons": "^15.1.1",
     "@livekit/react-native": "^2.12.0",

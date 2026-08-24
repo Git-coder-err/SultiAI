@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSignIn, isClerkAPIResponseError } from '@clerk/clerk-expo';
+import { useSignIn, isClerkAPIResponseError } from '@clerk/expo';
 import { useTheme } from '../../context/ThemeContext';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
