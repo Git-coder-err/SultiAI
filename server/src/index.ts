@@ -37,6 +37,7 @@ import vocabularyIntelligenceRoutes from './routes/vocabulary.routes';
 import pronunciationIntelligenceRoutes from './routes/pronunciation.routes';
 import recommendationRoutes from './routes/recommendation.routes';
 import notificationPreferencesRoutes from './routes/notificationPreferences.routes';
+import adminRoutes from './routes/admin.routes';
 import { authMiddleware } from './middleware/auth';
 import { buildSultiPrompt, buildCharacterPrompt } from './utils/prompts';
 import { success, errors } from './utils/apiResponse';
@@ -87,6 +88,7 @@ app.use('/api/v2/vocabulary', vocabularyIntelligenceRoutes);
 app.use('/api/v2/pronunciation', pronunciationIntelligenceRoutes);
 app.use('/api/v2/recommendations', recommendationRoutes);
 app.use('/api/v2/notifications/preferences', notificationPreferencesRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.post('/api/assistant/chat', authMiddleware, async (req, res) => {
   try {

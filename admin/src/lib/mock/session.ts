@@ -1,17 +1,18 @@
 import { useSyncExternalStore } from "react";
-import type { AdminSession } from "@/types";
+
+export interface AdminSession {
+  id: string;
+  name: string;
+  email: string;
+  provider: "google" | "email";
+  role: string;
+  avatar: string;
+  signedInAt: string;
+  token: string;
+}
 
 const SESSION_KEY = "sultiai_admin_session";
-
-const mockAccount: AdminSession = {
-  id: "1",
-  name: "Genesis Diaz",
-  email: "genesis@sultiai.com",
-  provider: "google",
-  role: "admin",
-  avatar: "GD",
-  signedInAt: new Date().toISOString(),
-};
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 let currentSession: AdminSession | null = null;
 let initialized = false;
@@ -60,10 +61,6 @@ function commit(session: AdminSession | null) {
   listeners.forEach((l) => l());
 }
 
-function delay(ms = 350) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export const sessionMock = {
   getSession(): AdminSession | null {
     ensureInit();
@@ -71,13 +68,82 @@ export const sessionMock = {
   },
 
   async signIn(): Promise<AdminSession> {
-    await delay();
-    commit(mockAccount);
-    return mockAccount;
+    // Use real backend auth
+    const res = await fetch(`${API_BASE}/api/health`);
+    const health = await res.json();
+
+    // For now, use a hardcoded admin — in production, use proper login form
+    // This creates a session with a real JWT
+    const loginRes = await fetch(`${API_BASE}/api/auth/signin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "admin@sultiai.com",
+        password: "admin123",
+      }),
+    });
+
+    if (!loginRes.ok) {
+      // Fallback: create the admin account if it doesn't exist
+      const signupRes = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullname: "Admin",
+          email: "admin@sultiai.com",
+          password: "admin123",
+        }),
+      });
+
+      if (!signupRes.ok) {
+        throw new Error("Failed to create admin account");
+      }
+
+      const signupData = await signupRes.json();
+      const data = signupData.data || signupRes.json;
+
+      // Promote to admin
+      await fetch(`${API_BASE}/api/auth/promote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.accessToken}`,
+        },
+        body: JSON.stringify({ email: "admin@sultiai.com" }),
+      });
+
+      const session: AdminSession = {
+        id: String(data.user?.id ?? "1"),
+        name: data.user?.fullname ?? "Admin",
+        email: data.user?.email ?? "admin@sultiai.com",
+        provider: "email",
+        role: "admin",
+        avatar: "A",
+        signedInAt: new Date().toISOString(),
+        token: data.accessToken,
+      };
+      commit(session);
+      return session;
+    }
+
+    const signinData = await loginRes.json();
+    const d = signinData.data || signinData;
+
+    const session: AdminSession = {
+      id: String(d.user?.id ?? "1"),
+      name: d.user?.fullname ?? "Admin",
+      email: d.user?.email ?? "admin@sultiai.com",
+      provider: "email",
+      role: "admin",
+      avatar: "A",
+      signedInAt: new Date().toISOString(),
+      token: d.accessToken,
+    };
+    commit(session);
+    return session;
   },
 
   async signOut(): Promise<void> {
-    await delay(200);
     commit(null);
   },
 };
