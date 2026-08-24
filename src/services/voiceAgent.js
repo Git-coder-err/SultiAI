@@ -1,13 +1,33 @@
 import { api } from './api';
 
 export const REALTIME_INPUT_RATE = 24000;
-export const ELEVENLABS_INPUT_RATE = 16000;
 
+// ── ElevenLabs Conversational AI Agent Config ──────────────────────────
+// Pulled from the deployed agent (agent_2501m0rx2v6hf9hrf5j98zhgf25t)
+export const ELEVENLABS_AGENT_ID = 'agent_2501m0rx2v6hf9hrf5j98zhgf25t';
+export const ELEVENLABS_INPUT_RATE = 16000;   // pcm_16000 — user input format
+export const ELEVENLABS_OUTPUT_RATE = 16000;  // pcm_16000 — agent output format
+export const ELEVENLABS_VOICE_ID = 'cjVigY5qzO86Huf0OWal';
+export const ELEVENLABS_TTS_MODEL = 'eleven_v3_conversational';
+
+// Language code mapping (ElevenLabs agent default is "fil")
+const LANGUAGE_CODES = {
+  tagalog: 'fil',
+  bisaya: 'ceb',
+  english: 'en',
+};
+
+const LANGUAGE_NAMES = {
+  bisaya: 'Bisaya (Cebuano)',
+  tagalog: 'Tagalog',
+  english: 'English',
+};
+
+// ── Fetch signed URL for WebSocket fallback ───────────────────────────
 export async function fetchVoiceAgentConfig() {
   try {
     return await api.agentToken();
   } catch (err) {
-    // xAI realtime requires XAI_API_KEY - fall back to local mode
     const status = await api.agentStatus().catch(() => ({ realtime: false, local_available: true }));
     if (status.local_available) {
       return { local: true, url: null, token: null, session: null };
@@ -25,18 +45,40 @@ export async function checkVoiceMode() {
   };
 }
 
-export async function fetchElevenlabsConfig(language = 'tagalog') {
-  const config = await api.elevenlabsSession();
-  const languageCode = { tagalog: 'fil', bisaya: 'ceb', english: 'en' }[language] || 'fil';
-  return { ...config, language, language_code: languageCode };
+// ── Build overrides for the ElevenLabs agent ──────────────────────────
+// These are sent via the SDK startSession or WebSocket init message.
+// The agent has "text_only: true" by default — we override to false for audio.
+export function buildElevenlabsOverrides(language = 'tagalog') {
+  const langCode = LANGUAGE_CODES[language] || 'fil';
+
+  return {
+    conversation: {
+      text_only: false,          // Enable audio mode (agent default is text-only)
+    },
+    agent: {
+      language: langCode,        // Switch language per user preference
+    },
+    tts: {
+      voice_id: ELEVENLABS_VOICE_ID,
+    },
+  };
 }
 
-const LANGUAGE_NAMES = {
-  bisaya: 'Bisaya (Cebuano)',
-  tagalog: 'Tagalog',
-  english: 'English',
-};
+// ── Fetch ElevenLabs config from server ───────────────────────────────
+export async function fetchElevenlabsConfig(language = 'tagalog') {
+  const config = await api.elevenlabsSession();
+  const languageCode = LANGUAGE_CODES[language] || 'fil';
+  const overrides = buildElevenlabsOverrides(language);
 
+  return {
+    ...config,
+    language,
+    language_code: languageCode,
+    overrides,
+  };
+}
+
+// ── Build the agent prompt (used for WebSocket fallback overrides) ────
 export function buildElevenlabsPrompt(language = 'tagalog') {
   const langName = LANGUAGE_NAMES[language] || LANGUAGE_NAMES.tagalog;
   return `You are "Sulti", a friendly and patient ${langName} language tutor for the SultiAI app.
@@ -49,6 +91,8 @@ RULES:
 - Gently correct grammar or pronunciation mistakes first, then continue the conversation naturally.
 - When teaching a new word, say the word slowly, give its English meaning, then use it in a simple example sentence.`;
 }
+
+// ── Audio encoding helpers ────────────────────────────────────────────
 
 export function encodePcm16ToBase64(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
@@ -111,6 +155,8 @@ export function resampleInt16(arrayBuffer, fromRate, toRate) {
   }
   return out.buffer;
 }
+
+// ── xAI Realtime Session ─────────────────────────────────────────────
 
 export function buildSessionUpdate(session) {
   return {
@@ -220,7 +266,7 @@ export class VoiceRealtimeSession {
   }
 }
 
-// ElevenLabs Agents (Conversational AI) speech-to-speech WebSocket session.
+// ── ElevenLabs WebSocket Session (fallback when SDK isn't available) ──
 // Protocol: wss conversation — first message is conversation_initiation_client_data,
 // then user_audio_chunk frames in; server streams audio/user_transcript/agent_response back.
 export class ElevenLabsVoiceSession {
@@ -231,7 +277,7 @@ export class ElevenLabsVoiceSession {
     this.onEvent = onEvent;
     this.onError = onError;
     this.onClose = onClose;
-    this.outputSampleRate = 24000; // updated from conversation_initiation_metadata
+    this.outputSampleRate = ELEVENLABS_OUTPUT_RATE; // pcm_16000 per agent config
     this.conversationId = null;
     this.ws = null;
     this._resolveOpen = null;
@@ -252,18 +298,14 @@ export class ElevenLabsVoiceSession {
       }
       this.ws = ws;
       ws.onopen = () => {
-        // The signed URL already authenticates us; kick off the conversation.
+        // Build the conversation_initiation_client_data with overrides
         const init = { type: 'conversation_initiation_client_data' };
+
         if (this.overridesAllowed) {
-          init.conversation_config_override = {
-            agent: {
-              first_message: '',
-              prompt: { prompt: buildElevenlabsPrompt(this.language) },
-            },
-          };
-          const code = { tagalog: 'fil', bisaya: 'ceb', english: 'en' }[this.language];
-          if (code && code !== 'ceb') init.conversation_config_override.agent.language = code;
+          const overrides = buildElevenlabsOverrides(this.language);
+          init.conversation_config_override = overrides;
         }
+
         try {
           ws.send(JSON.stringify(init));
         } catch (e) {

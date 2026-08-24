@@ -32,7 +32,7 @@ import { speakTTS, stopTTS, setTTSMuted, getAudioPlayer } from '../utils/tts';
 import { playRealtimePcm } from '../utils/realtimeAudio';
 import {
   VoiceRealtimeSession, fetchVoiceAgentConfig, encodePcm16ToBase64, encodeWavBase64, resampleInt16, REALTIME_INPUT_RATE,
-  fetchElevenlabsConfig, ELEVENLABS_INPUT_RATE,
+  fetchElevenlabsConfig, ELEVENLABS_INPUT_RATE, ELEVENLABS_AGENT_ID, buildElevenlabsOverrides,
 } from '../services/voiceAgent';
 import {
   hapticMicStart, hapticMicEnd, hapticAIBeginsSpeaking, hapticAIFinished,
@@ -55,9 +55,6 @@ const LANG_META = {
   tagalog: { flag: '🇵🇭', label: 'Tagalog' },
   english: { flag: '🇺🇸', label: 'English' },
 };
-
-// ElevenLabs Conversational AI Agent
-const ELEVENLABS_AGENT_ID = 'agent_2501m0rx2v6hf9hrf5j98zhgf25t';
 
 export default function VoiceModeScreen({ navigation }) {
   const { addXp, streak } = useGame();
@@ -583,7 +580,11 @@ export default function VoiceModeScreen({ navigation }) {
 
       // Try the ElevenLabs React Native SDK first (WebRTC, lower latency)
       try {
-        await elevenConversation.startSession({ agentId: ELEVENLABS_AGENT_ID });
+        const overrides = buildElevenlabsOverrides(langRef.current);
+        await elevenConversation.startSession({
+          agentId: ELEVENLABS_AGENT_ID,
+          overrides,
+        });
         agentModeRef.current = 'elevenlabs-sdk';
         connected = true;
       } catch (sdkErr) {
