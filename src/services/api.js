@@ -26,6 +26,8 @@ export const api = {
     request('POST', '/api/auth/signup', { fullname: name, email, password, native_language, target_language }),
   signIn: (email, password) =>
     request('POST', '/api/auth/signin', { email, password }),
+  clerkSync: (clerkId, clerkToken, profile) =>
+    request('POST', '/api/auth/clerk-sync', { clerkId, clerkToken, ...profile }),
 
   // Profile
   getProfile: () => request('GET', '/api/user/me'),
@@ -181,6 +183,9 @@ export const api = {
   // Voice Agent (xAI realtime speech-to-speech)
   agentStatus: () => request('GET', '/api/agent/status'),
   agentToken: () => request('POST', '/api/agent/token'),
+
+  // Voice Agent (ElevenLabs speech-to-speech)
+  elevenlabsSession: () => request('GET', '/api/agent/elevenlabs'),
 
   // Generic methods for offline sync
   postData: (path, body) => request('POST', path, body),

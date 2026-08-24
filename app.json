@@ -25,6 +25,21 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "microphonePermission": "SultiAI needs microphone access for voice conversations with your AI tutor."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "SultiAI needs microphone access for voice conversations with your AI tutor."
+        }
+      ]
+    ]
   }
 }
