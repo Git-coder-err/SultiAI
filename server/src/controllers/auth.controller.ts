@@ -328,6 +328,101 @@ export async function signOut(req: Request, res: Response): Promise<void> {
   }
 }
 
+/**
+ * Sync a Supabase user into the local SQLite database.
+ * Called by the mobile app after successful Supabase signup/sign-in
+ * so the user appears in the admin panel.
+ */
+export async function syncSupabase(req: Request, res: Response): Promise<void> {
+  try {
+    const { supabaseId, email, name, native_language, target_language } = req.body || {};
+    if (!supabaseId || !email) {
+      errors.validation(res, 'supabaseId and email are required');
+      return;
+    }
+
+    const db = getDb();
+
+    // 1. Try to find existing user by supabase_id
+    let rows: any[] = await (db as any).select()
+      .from(schema.users)
+      .where(eq(schema.users.supabaseId, supabaseId))
+      .limit(1);
+
+    // 2. If not found by supabase_id, try by email
+    if (rows.length === 0 && email) {
+      rows = await (db as any).select()
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+
+      // If found by email, link the supabase_id
+      if (rows.length > 0) {
+        await (db as any).update(schema.users)
+          .set({ supabaseId })
+          .where(eq(schema.users.userId, rows[0].userId));
+      }
+    }
+
+    let userId: number;
+    let isNewUser = false;
+
+    if (rows.length > 0) {
+      // Existing user — update info if needed
+      userId = rows[0].userId;
+      const updates: any = {};
+      if (name && name !== rows[0].fullname) updates.fullname = name;
+      if (Object.keys(updates).length > 0) {
+        await (db as any).update(schema.users)
+          .set(updates)
+          .where(eq(schema.users.userId, userId));
+      }
+    } else {
+      // New user — create account in SQLite
+      const fullname = name || 'User';
+      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder, not used for Supabase login
+      const result = await (db as any).insert(schema.users).values({
+        fullname,
+        email,
+        passwordHash,
+        supabaseId,
+        preferredLang: native_language || 'English',
+        learningLang: target_language || 'Bisaya',
+        createdAt: new Date().toISOString(),
+      });
+      userId = result.lastInsertRowid;
+      isNewUser = true;
+
+      // Create learner profile
+      await (db as any).insert(schema.learnerProfiles).values({
+        userId,
+        level: 'beginner',
+        totalXp: 0,
+        coins: 0,
+        streak: 0,
+        dailyXp: 0,
+        dailyGoal: 50,
+        totalSessions: 0,
+      });
+    }
+
+    const existingUser = rows.length > 0 ? rows[0] : null;
+
+    success(res, {
+      user: {
+        id: userId,
+        fullname: name || existingUser?.fullname || 'User',
+        email: email || existingUser?.email,
+        role: existingUser?.role || 'user',
+      },
+      isNewUser,
+    }, isNewUser ? 'Supabase user synced to local DB' : 'Supabase user already exists in local DB');
+  } catch (err) {
+    logger.error('Supabase sync error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to sync Supabase user');
+  }
+}
+
 async function storeRefreshToken(userId: number, token: string): Promise<void> {
   try {
     const db = getDb();

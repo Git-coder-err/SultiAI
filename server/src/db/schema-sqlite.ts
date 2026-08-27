@@ -14,11 +14,13 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   clerkId: text('clerk_id'),
   googleId: text('google_id'),
+  supabaseId: text('supabase_id'),
   avatarId: integer('avatar_id').default(1),
   preferredLang: text('preferred_lang').default('English'),
   learningLang: text('learning_lang').default('Bisaya'),
   country: text('country'),
   role: text('role').notNull().default('user'),
+  isVerified: integer('is_verified').default(0),
   createdAt: text('created_at').default(`datetime('now')`),
 });
 
@@ -54,6 +56,7 @@ export const feedback = sqliteTable('feedback', {
   functionality: integer('functionality').default(0),
   usability: integer('usability').default(0),
   reliability: integer('reliability').default(0),
+  resolved: integer('resolved').default(0),
   createdAt: text('created_at').default(`datetime('now')`),
 });
 
@@ -123,6 +126,9 @@ export const communityPosts = sqliteTable('community_posts', {
   phrase: text('phrase'),
   translation: text('translation'),
   category: text('category'),
+  likesCount: integer('likes_count').default(0),
+  bookmarksCount: integer('bookmarks_count').default(0),
+  isFeatured: integer('is_featured').default(0),
   createdAt: text('created_at').default(`datetime('now')`),
 });
 
@@ -131,6 +137,15 @@ export const comments = sqliteTable('comments', {
   postId: integer('post_id').notNull().references(() => communityPosts.postId, { onDelete: 'cascade' }),
   userId: integer('user_id').notNull().references(() => users.userId, { onDelete: 'cascade' }),
   comment: text('comment'),
+  createdAt: text('created_at').default(`datetime('now')`),
+});
+
+export const communityReports = sqliteTable('community_reports', {
+  reportId: integer('report_id').primaryKey({ autoIncrement: true }),
+  postId: integer('post_id').notNull().references(() => communityPosts.postId, { onDelete: 'cascade' }),
+  reporterId: integer('reporter_id').references(() => users.userId, { onDelete: 'set null' }),
+  reason: text('reason'),
+  status: text('status').default('open'),
   createdAt: text('created_at').default(`datetime('now')`),
 });
 

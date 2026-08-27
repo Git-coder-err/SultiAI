@@ -4,6 +4,8 @@ import {
   getOverview,
   listUsers,
   getUser,
+  createUser,
+  deleteUser,
   updateUserRole,
   updateUserStatus,
   verifyUser,
@@ -38,6 +40,8 @@ router.get('/analytics/overview', getOverview);
 // Users
 router.get('/users', listUsers);
 router.get('/users/:id', getUser);
+router.post('/users', createUser);
+router.delete('/users/:id', deleteUser);
 router.patch('/users/:id/role', updateUserRole);
 router.patch('/users/:id/status', updateUserStatus);
 router.post('/users/:id/verify', verifyUser);

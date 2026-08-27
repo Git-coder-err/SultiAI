@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { Card, EmptyState, ErrorState, LoadingState, StatusBadge, ghostBtn, inputCls, primaryBtn, selectCls } from "@/components/ui";
+import { downloadCsv } from "@/lib/export";
 
 const difficultyTone: Record<ModuleDifficulty, string> = {
   beginner: "text-success bg-success/10",
@@ -41,9 +42,35 @@ export default function AdminLessonsPage() {
           <h1 className="text-2xl font-extrabold text-ink">Lessons</h1>
           <p className="mt-1 text-sm text-ink-soft">{data?.length ?? 0} learning modules</p>
         </div>
-        <button type="button" className={primaryBtn} onClick={() => setEditing("new")}>
-          + New lesson module
-        </button>
+        <div className="flex items-center gap-3">
+          {data && data.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  data.map((l) => ({
+                    id: l.id,
+                    title: l.title,
+                    difficulty: l.difficulty,
+                    language: l.language,
+                    lessons: l.lessons,
+                    completions: l.completions,
+                    avgCompletionPercent: l.avgCompletionPercent,
+                    published: l.published,
+                    updatedAt: l.updatedAt,
+                  })),
+                  `sultiai-lessons-${new Date().toISOString().split("T")[0]}.csv`
+                )
+              }
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+            >
+              Export CSV
+            </button>
+          )}
+          <button type="button" className={primaryBtn} onClick={() => setEditing("new")}>
+            + New lesson module
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -167,15 +194,26 @@ function LessonModal({
     lessons: lesson?.lessons ?? 8,
     published: lesson?.published ?? true,
   });
+  const [errors, setErrors] = useState<{ title?: string; lessons?: string }>({});
+
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!form.title.trim()) e.title = "Title is required.";
+    else if (form.title.trim().length < 3) e.title = "Title must be at least 3 characters.";
+    if (!form.lessons || form.lessons < 1) e.lessons = "Must have at least 1 lesson.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!validate()) return;
     setBusy(true);
     try {
       if (lesson) {
-        await api.updateLesson(lesson.id, form);
+        await api.updateLesson(lesson.id, { ...form, title: form.title.trim() });
       } else {
-        await api.createLesson({ ...form, language: "Bisaya (Cebuano)" });
+        await api.createLesson({ ...form, title: form.title.trim(), language: "Bisaya (Cebuano)" });
       }
       onSaved();
     } finally {
@@ -195,12 +233,12 @@ function LessonModal({
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink">Title</label>
             <input
-              required
-              className={inputCls}
+              className={`${inputCls} ${errors.title ? "border-danger" : ""}`}
               placeholder="e.g. Greetings & Introductions"
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              onChange={(e) => { setForm({ ...form, title: e.target.value }); setErrors((p) => ({ ...p, title: undefined })); }}
             />
+            {errors.title && <p className="mt-1 text-xs text-danger">{errors.title}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -218,13 +256,13 @@ function LessonModal({
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink">Number of lessons</label>
               <input
-                required
                 type="number"
                 min={1}
-                className={inputCls}
+                className={`${inputCls} ${errors.lessons ? "border-danger" : ""}`}
                 value={form.lessons}
-                onChange={(e) => setForm({ ...form, lessons: Number(e.target.value) })}
+                onChange={(e) => { setForm({ ...form, lessons: Number(e.target.value) }); setErrors((p) => ({ ...p, lessons: undefined })); }}
               />
+              {errors.lessons && <p className="mt-1 text-xs text-danger">{errors.lessons}</p>}
             </div>
           </div>
           <label className="flex items-center gap-2.5 text-sm text-ink">

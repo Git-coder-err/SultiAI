@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { authRateLimit } from '../middleware/rateLimit';
 import { validate, validators } from '../middleware/validate';
-import { signUp, signIn, refreshToken, signOut, clerkSync, googleSignIn } from '../controllers/auth.controller';
+import { signUp, signIn, refreshToken, signOut, clerkSync, googleSignIn, syncSupabase } from '../controllers/auth.controller';
+import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
 
@@ -17,9 +18,41 @@ router.post('/signin', authRateLimit, validate([
 ]), signIn);
 
 router.post('/clerk-sync', authRateLimit, clerkSync);
+router.post('/sync-supabase', authRateLimit, syncSupabase);
 router.post('/google', authRateLimit, googleSignIn);
 router.post('/refresh', authRateLimit, refreshToken);
 router.post('/signout', signOut);
+
+// Auto-confirm Supabase user (development helper)
+// Uses service_role key to bypass email confirmation
+router.post('/confirm-user', async (req, res) => {
+  const { email, userId } = req.body || {};
+  if (!email || !userId) {
+    res.status(400).json({ error: 'email and userId required' });
+    return;
+  }
+
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    res.status(503).json({ error: 'Supabase admin not configured' });
+    return;
+  }
+
+  try {
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+    });
+
+    if (error) throw error;
+    res.json({ message: 'User confirmed', userId: data.user.id });
+  } catch (err) {
+    console.error('[Auth] Auto-confirm error:', (err as Error).message);
+    res.status(500).json({ error: 'Failed to confirm user' });
+  }
+});
 
 // Admin setup: promote user by email (unauthenticated, for initial bootstrap only)
 router.post('/promote', async (req, res) => {

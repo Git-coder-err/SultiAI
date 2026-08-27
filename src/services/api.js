@@ -1,9 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 
 async function getToken() {
-  return AsyncStorage.getItem('auth_token');
+  try {
+    // Try Supabase session first
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) return session.access_token;
+  } catch {}
+  return null;
 }
 
 async function request(method, path, body = null) {
@@ -26,8 +31,6 @@ export const api = {
     request('POST', '/api/auth/signup', { fullname: name, email, password, native_language, target_language }),
   signIn: (email, password) =>
     request('POST', '/api/auth/signin', { email, password }),
-  clerkSync: (clerkId, clerkToken, profile) =>
-    request('POST', '/api/auth/clerk-sync', { clerkId, clerkToken, ...profile }),
   googleSignIn: (idToken, email, name, avatar) =>
     request('POST', '/api/auth/google', { idToken, email, name, avatar }),
 
@@ -65,6 +68,12 @@ export const api = {
   analyzeNLP: (text) => request('POST', '/api/speech/nlp/analyze', { text }),
   detectLanguage: (text) => request('POST', '/api/speech/detect', { text }),
   checkPronunciation: (text) => request('POST', '/api/speech/pronunciation/check', { text }),
+  checkPronunciationAudio: (audioBase64, expectedText, language) =>
+    request('POST', '/api/speech/pronunciation/check', {
+      audio: audioBase64,
+      expected_text: expectedText,
+      language: language || 'ceb',
+    }),
 
   // Phrases
   recommendPhrases: (situation, language) =>

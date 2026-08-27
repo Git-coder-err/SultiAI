@@ -241,11 +241,30 @@ function FeedbackScreen({ result, phrase, onNext, onDone }) {
         <View style={styles.phonemeSection}>
           <Text style={styles.phonemeLabel}>Breakdown</Text>
           <View style={styles.phonemeList}>
-            {result.phoneme_breakdown.slice(0, 4).map((p, i) => (
+            {result.phoneme_breakdown.slice(0, 6).map((p, i) => (
               <View key={i} style={styles.phonemeChip}>
                 <Text style={styles.phonemeExpected}>{p.expected}</Text>
                 <Ionicons name={p.correct ? 'checkmark-circle' : 'close-circle'} size={14} color={p.correct ? '#34D399' : '#F87171'} />
                 <Text style={styles.phonemeHeard}>{p.heard}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {result.metrics && (
+        <View style={styles.feedbackCard}>
+          <Text style={styles.feedbackLabel}>Acoustic Analysis</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+            {[
+              { label: 'Pitch', value: `${Math.round(result.metrics.pitch_accuracy * 100)}%` },
+              { label: 'Formants', value: `${Math.round(result.metrics.formant_accuracy * 100)}%` },
+              { label: 'Volume', value: `${Math.round(result.metrics.energy_consistency * 100)}%` },
+              { label: 'Pace', value: `${result.metrics.speaking_rate?.toFixed(1)} syl/s` },
+            ].map((m, i) => (
+              <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 11 }}>{m.label}</Text>
+                <Text style={{ color: '#F1F5F9', fontSize: 14, fontWeight: '600' }}>{m.value}</Text>
               </View>
             ))}
           </View>
@@ -385,9 +404,23 @@ export default function PronunciationScreen({ navigation }) {
       setRecording(null);
       const audioFile = new File(uri);
       const audioBase64 = await audioFile.base64();
-      const data = await api.transcribe(audioBase64, selectedDialect?.language);
-      const pronunciation = await api.checkPronunciation(data.text || '');
-      setResult({ transcription: data.text, ...pronunciation });
+
+      // Send audio + expected text for acoustic analysis
+      const expectedText = currentPhrase?.text || currentPhrase?.phrase || '';
+      const pronunciation = await api.checkPronunciationAudio(
+        audioBase64,
+        expectedText,
+        selectedDialect?.language || 'ceb',
+      );
+
+      // Also transcribe to show what was heard
+      let transcription = '';
+      try {
+        const data = await api.transcribe(audioBase64, selectedDialect?.language);
+        transcription = data.text || '';
+      } catch {}
+
+      setResult({ transcription, ...pronunciation });
       setStep('result');
       const score = pronunciation.score || 0;
       setStats((prev) => {
@@ -404,7 +437,7 @@ export default function PronunciationScreen({ navigation }) {
       Alert.alert('Error', 'Failed to analyze pronunciation');
       setStep('phrase');
     }
-  }, [recording, selectedDialect]);
+  }, [recording, selectedDialect, currentPhrase]);
 
   const toggleRecording = useCallback(() => {
     if (recording) stopRecording(); else startRecording();

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth';
 import { isConfigured, groqChat, groqTranscribeAudio, groqJson } from '../utils/groq';
+import { isPythonServiceAvailable, scoreWithPython } from '../utils/pythonService';
 import ttsService, { CHARACTER_VOICES } from '../services/ttsService';
 
 const router = Router();
@@ -138,23 +139,54 @@ router.post('/detect', authMiddleware, async (req: Request, res: Response) => {
 
 router.post('/pronunciation/check', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { text } = req.body || {};
-    if (!text) {
-      res.status(400).json({ error: 'Text is required' });
+    const { text, audio, expected_text, language } = req.body || {};
+    const expectedText = expected_text || text;
+
+    if (!expectedText) {
+      res.status(400).json({ error: 'Text or expected_text is required' });
       return;
     }
+
+    // ── Path 1: Python acoustic analysis (if audio + service available) ──
+    if (audio) {
+      const pythonAvailable = await isPythonServiceAvailable();
+      if (pythonAvailable) {
+        try {
+          const result = await scoreWithPython(
+            audio,
+            expectedText,
+            language || 'ceb',
+            language === 'tl' ? 'recording.mp3' : 'recording.m4a',
+          );
+          if (result) {
+            res.json(result);
+            return;
+          }
+        } catch (pyErr) {
+          console.warn('[Pronunciation] Python service failed, falling back to LLM:', (pyErr as Error).message);
+        }
+      }
+    }
+
+    // ── Path 2: LLM-based fallback (text-only) ──
     if (!isConfigured()) {
-      res.json({ score: 85, feedback: "Good pronunciation! Keep practicing the vowel sounds.", note: "AI service not configured - using default assessment" });
+      res.json({
+        score: 85,
+        feedback: "Good pronunciation! Keep practicing the vowel sounds.",
+        note: "AI service not configured - using default assessment",
+      });
       return;
     }
+
     const systemPrompt = 'You are a Bisaya (Cebuano) pronunciation coach. Analyze the given text.\nReturn ONLY a valid JSON object with exactly these fields:\n- "score": number 0-100\n- "feedback": string with specific sound corrections\n- "phoneme_breakdown": array of {"expected": string, "heard": string, "correct": boolean, "tip": string}\n\nBisaya pronunciation rules:\n- "a" is "ah" like in "father"\n- "e" is "eh" like in "bed"\n- "i" is "ee" like in "see"\n- "o" is "oh" like in "slow"\n- "u" is "oo" like in "food"\n- "ng" is a single sound like in "singing"';
+
     try {
-      const result = await groqJson(systemPrompt, `Pronunciation text: "${text}"`, { temperature: 0.5, maxTokens: 300 });
+      const result = await groqJson(systemPrompt, `Pronunciation text: "${expectedText}"`, { temperature: 0.5, maxTokens: 300 });
       res.json(result);
     } catch {
       const content = await groqChat([
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Pronunciation text: "${text}"` },
+        { role: 'user', content: `Pronunciation text: "${expectedText}"` },
       ], { temperature: 0.5, maxTokens: 300 });
       try { res.json(JSON.parse(content)); } catch {
         res.json({ score: 88, feedback: content });

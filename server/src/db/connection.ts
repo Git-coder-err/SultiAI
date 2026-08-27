@@ -4,9 +4,11 @@ import * as path from 'path';
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../sultiai.db');
 const DIALECT = process.env.DB_DIALECT || 'sqlite';
+const DATABASE_URL = process.env.DATABASE_URL || '';
 
 let db: ReturnType<typeof drizzle>;
 let sqliteRaw: Database.Database | null = null;
+let pgPool: any = null;
 
 function getDialect() {
   if (DIALECT === 'postgresql' || DIALECT === 'postgres') return 'postgres';
@@ -33,6 +35,7 @@ function initDatabase() {
     `CREATE TABLE IF NOT EXISTS learning_progress (progress_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, module_id INTEGER NOT NULL, completion_percent REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (module_id) REFERENCES learning_modules(module_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS community_posts (post_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT, content TEXT, phrase TEXT, translation TEXT, category TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS comments (comment_id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, comment TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
+    `CREATE TABLE IF NOT EXISTS community_reports (report_id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, reporter_id INTEGER, reason TEXT, status TEXT DEFAULT 'open', created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE, FOREIGN KEY (reporter_id) REFERENCES users(user_id) ON DELETE SET NULL)`,
     `CREATE TABLE IF NOT EXISTS learner_profiles (profile_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, level TEXT DEFAULT 'beginner', strengths TEXT, weak_areas TEXT, common_mistakes TEXT, total_xp INTEGER DEFAULT 0, coins INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, daily_xp INTEGER DEFAULT 0, daily_goal INTEGER DEFAULT 50, total_sessions INTEGER DEFAULT 0, last_active TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS tutor_sessions (session_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, messages TEXT, summary TEXT, started_at TEXT DEFAULT (datetime('now')), ended_at TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
     `CREATE TABLE IF NOT EXISTS daily_activity (activity_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, activity_date TEXT NOT NULL, xp_earned INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`,
@@ -68,6 +71,8 @@ function initDatabase() {
     { table: 'community_posts', column: 'likes_count', sql: 'ALTER TABLE community_posts ADD COLUMN likes_count INTEGER DEFAULT 0' },
     { table: 'community_posts', column: 'bookmarks_count', sql: 'ALTER TABLE community_posts ADD COLUMN bookmarks_count INTEGER DEFAULT 0' },
     { table: 'community_posts', column: 'is_featured', sql: 'ALTER TABLE community_posts ADD COLUMN is_featured INTEGER DEFAULT 0' },
+    { table: 'feedback', column: 'resolved', sql: 'ALTER TABLE feedback ADD COLUMN resolved INTEGER DEFAULT 0' },
+    { table: 'users', column: 'supabase_id', sql: 'ALTER TABLE users ADD COLUMN supabase_id TEXT' },
   ];
   for (const m of addColumnMigrations) {
     const cols = sqliteRaw.prepare(`PRAGMA table_info(${m.table})`).all() as Array<{ name: string }>;
@@ -98,10 +103,36 @@ export function connect() {
   if (dialect === 'postgres') {
     const { Pool } = require('pg');
     const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
-    const schema = require('./schema-pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/sultiai' });
-    db = drizzlePg(pool, { schema });
-    console.log(`PostgreSQL connected (dialect: ${DIALECT})`);
+    const schema = require('./schema-sqlite');
+    
+    // Use DATABASE_URL for connection (Supabase format)
+    const connectionString = DATABASE_URL;
+    
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is required for PostgreSQL dialect');
+    }
+    
+    // Configure pool for Supabase PostgreSQL
+    pgPool = new Pool({
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false, // Required for Supabase cloud
+      },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+    
+    // Test connection
+    pgPool.query('SELECT NOW()', (err: any, result: any) => {
+      if (err) {
+        console.error('PostgreSQL connection error:', err.message);
+      } else {
+        console.log(`PostgreSQL connected: ${result.rows[0].now} (dialect: ${DIALECT})`);
+      }
+    });
+    
+    db = drizzlePg(pgPool, { schema });
     return db;
   }
 
@@ -133,4 +164,8 @@ export function getDialectName() {
 
 export async function closeAll() {
   if (sqliteRaw) sqliteRaw.close();
+  if (pgPool) {
+    await pgPool.end();
+    console.log('PostgreSQL pool closed');
+  }
 }

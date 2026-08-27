@@ -26,6 +26,8 @@ const badges = ["First Steps", "Streak Master", "Voice Virtuoso", "Culture Keepe
 
 const weakAreas = ["Word order", "Verb focus", "Ligatures", "Politeness markers", "Numbers"];
 
+const nativeLanguages = ["English", "Tagalog", "Japanese", "Korean", "Chinese", "Spanish", "French"];
+
 function randomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -49,18 +51,43 @@ function iso(daysAgo: number, hour = 12) {
   return d.toISOString();
 }
 
+/** Calculate XP-based level (1-15) matching the server logic */
+function xpToLevel(xp: number): number {
+  if (xp >= 5000) return 15;
+  if (xp >= 3500) return 12;
+  if (xp >= 2500) return 10;
+  if (xp >= 1800) return 8;
+  if (xp >= 1200) return 6;
+  if (xp >= 700) return 5;
+  if (xp >= 400) return 4;
+  if (xp >= 200) return 3;
+  if (xp >= 80) return 2;
+  return 1;
+}
+
+/** Realistic XP distribution for language learners */
+function realisticXp(): number {
+  const roll = Math.random();
+  if (roll < 0.35) return randomInt(0, 150);       // 35% beginners
+  if (roll < 0.55) return randomInt(150, 500);      // 20% casual
+  if (roll < 0.75) return randomInt(500, 1200);     // 20% regular
+  if (roll < 0.90) return randomInt(1200, 2500);    // 15% dedicated
+  return randomInt(2500, 4650);                      // 10% hardcore
+}
+
 export const seedUsers: AdminUser[] = Array.from({ length: 48 }, (_, i) => {
   const name = fullName(i);
   const role = i < 2 ? "admin" : i < 6 ? "moderator" : "user";
   const status = i % 17 === 0 ? "banned" : i % 13 === 0 ? "suspended" : "active";
+  const xp = realisticXp();
   return {
     id: i + 1,
     name,
     email: emailFor(name, i),
     role,
     status,
-    level: randomInt(1, 18),
-    xp: randomInt(120, 4650),
+    level: xpToLevel(xp),
+    xp,
     streak: randomInt(0, 38),
     lessons: randomInt(2, 180),
     verified: i % 4 === 0,

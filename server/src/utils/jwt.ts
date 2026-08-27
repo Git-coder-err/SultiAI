@@ -5,6 +5,9 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret
 const ACCESS_TOKEN_EXPIRY = 15 * 60 * 1000;
 const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000;
 
+// Supabase JWT secret for verifying Supabase-issued tokens
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || 'MCTSVBraL1sk/bLDmSbxNgFkpVMCac8Kgjpcj+UM4DXTGZ1lIIZwN7lfsOsTCedWGObwVUlpQN7SzOqLaNvFAg==';
+
 function base64url(text: string): string {
   return Buffer.from(text).toString('base64url');
 }
@@ -13,6 +16,7 @@ export interface JwtPayload {
   email: string;
   userId: number;
   id?: number;
+  sub?: string;
   iat?: number;
   exp?: number;
   type?: 'access' | 'refresh';
@@ -60,20 +64,41 @@ export function generateTokenPair(payload: { email: string; userId: number }): T
   };
 }
 
-export function verifyToken(token: string): JwtPayload | null {
+function verifyWithSecret(token: string, secret: string): JwtPayload | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const sig = crypto.createHmac('sha256', JWT_SECRET)
+    const sig = crypto.createHmac('sha256', secret)
       .update(parts[0] + '.' + parts[1])
       .digest('base64url');
     if (sig !== parts[2]) return null;
     const data = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-    if (data.exp < Date.now()) return null;
+    if (data.exp && data.exp < Date.now()) return null;
     return data as JwtPayload;
   } catch {
     return null;
   }
+}
+
+/**
+ * Verify a JWT token. Tries Supabase JWT first, then falls back to legacy server JWT.
+ * This allows the server to accept both Supabase-issued and server-issued tokens.
+ */
+export function verifyToken(token: string): JwtPayload | null {
+  // Try Supabase JWT first (sub field = UUID, email in payload)
+  const supabasePayload = verifyWithSecret(token, SUPABASE_JWT_SECRET);
+  if (supabasePayload && (supabasePayload as any).sub) {
+    // Supabase token — map sub to userId for server compatibility
+    return {
+      ...supabasePayload,
+      userId: supabasePayload.userId || 0,
+      email: supabasePayload.email || (supabasePayload as any).email || '',
+      id: supabasePayload.userId || 0,
+    };
+  }
+
+  // Fall back to legacy server JWT
+  return verifyWithSecret(token, JWT_SECRET);
 }
 
 export function verifyRefreshToken(token: string): JwtPayload | null {

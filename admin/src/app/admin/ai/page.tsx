@@ -5,6 +5,7 @@ import { StatCard } from "@/components/StatCard";
 import { Card, CardHeader, ErrorState, LoadingState } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
+import { downloadCsv } from "@/lib/export";
 
 export default function AdminAiPage() {
   const { data, loading, error, reload } = useAsync(() => api.getAiUsage(), []);
@@ -16,9 +17,28 @@ export default function AdminAiPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">AI Usage</h1>
-        <p className="mt-1 text-sm text-ink-soft">Model traffic, failures, and performance.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">AI Usage</h1>
+          <p className="mt-1 text-sm text-ink-soft">Model traffic, failures, and performance.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            downloadCsv(
+              data.providers.map((p) => ({
+                provider: p.name,
+                requests: p.requests,
+                failed: p.failed,
+                failureRate: `${((p.failed / p.requests) * 100).toFixed(1)}%`,
+              })),
+              `sultiai-ai-usage-${new Date().toISOString().split("T")[0]}.csv`
+            )
+          }
+          className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+        >
+          Export CSV
+        </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

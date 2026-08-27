@@ -55,7 +55,7 @@ export const api = {
     http("GET", "/api/admin/analytics/overview"),
 
   listUsers: (filters: UserFilters, page: number, perPage: number): Promise<UserListResponse> =>
-    http("GET", `/api/admin/users?page=${page}&perPage=${perPage}&search=${encodeURIComponent(filters.search || "")}&role=${filters.role}&sort=${filters.sort}`),
+    http("GET", `/api/admin/users?page=${page}&perPage=${perPage}&search=${encodeURIComponent(filters.search || "")}&role=${filters.role}&status=${filters.status}&sort=${filters.sort}`),
 
   getUser: (id: number): Promise<{ detail: UserDetail }> =>
     http("GET", `/api/admin/users/${id}`),
@@ -68,6 +68,12 @@ export const api = {
 
   verifyUser: (id: number, verified: boolean): Promise<AdminUser> =>
     http("POST", `/api/admin/users/${id}/verify`, { verified }),
+
+  createUser: (data: { fullname: string; email: string; password: string; role?: UserRole }): Promise<{ id: number; name: string; email: string; role: string }> =>
+    http("POST", "/api/admin/users", data),
+
+  deleteUser: (id: number): Promise<void> =>
+    http("DELETE", `/api/admin/users/${id}`),
 
   listLessons: (): Promise<LessonModule[]> =>
     http("GET", "/api/admin/lessons"),
@@ -85,7 +91,7 @@ export const api = {
     http("GET", "/api/admin/community/posts"),
 
   toggleFeatured: (id: number): Promise<CommunityPost> =>
-    http("PATCH", `/api/admin/community/posts/${id}`, { featured: true }),
+    http("PATCH", `/api/admin/community/posts/${id}`, { toggleFeatured: true }),
 
   setPostHidden: (id: number, hidden: boolean): Promise<CommunityPost> =>
     http("PATCH", `/api/admin/community/posts/${id}`, { hidden }),

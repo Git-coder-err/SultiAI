@@ -7,6 +7,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { downloadCsv } from "@/lib/export";
 
 const PER_PAGE = 10;
 
@@ -23,6 +24,8 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data, loading, error, reload } = useAsync(
     () => api.listUsers(filters, page, PER_PAGE),
@@ -30,7 +33,7 @@ export default function AdminUsersPage() {
   );
 
   const detail = useAsync<{ detail: UserDetail } | null>(
-    () => (selectedId ? api.getUser(selectedId).then((detail) => ({ detail })) : Promise.resolve(null)),
+    () => (selectedId ? api.getUser(selectedId) : Promise.resolve(null)),
     [selectedId],
   );
 
@@ -59,13 +62,73 @@ export default function AdminUsersPage() {
     if (selectedId === id) detail.reload();
   }
 
+  async function handleDelete(u: AdminUser) {
+    try {
+      await api.deleteUser(u.id);
+      toast.push("success", `${u.name} has been deleted permanently.`);
+      setDeleteTarget(null);
+      if (selectedId === u.id) setSelectedId(null);
+      reload();
+    } catch (err: any) {
+      toast.push("error", err?.message || "Failed to delete user.");
+    }
+  }
+
+  async function handleCreateUser(data: { fullname: string; email: string; password: string; role: UserRole }) {
+    try {
+      await api.createUser(data);
+      toast.push("success", `User "${data.fullname}" created successfully.`);
+      setShowCreateModal(false);
+      reload();
+    } catch (err: any) {
+      toast.push("error", err?.message || "Failed to create user.");
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PER_PAGE));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">Users</h1>
-        <p className="mt-1 text-sm text-ink-soft">{data?.total.toLocaleString()} accounts total</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Users</h1>
+          <p className="mt-1 text-sm text-ink-soft">{data?.total.toLocaleString() ?? "0"} accounts total</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {data && data.items.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  data.items.map((u) => ({
+                    id: u.id,
+                    name: u.name,
+                    email: u.email,
+                    role: u.role,
+                    status: u.status,
+                    level: u.level,
+                    xp: u.xp,
+                    streak: u.streak,
+                    lessons: u.lessons,
+                    joinedAt: u.joinedAt,
+                    lastActive: u.lastActive,
+                  })),
+                  `sultiai-users-${new Date().toISOString().split("T")[0]}.csv`
+                )
+              }
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+            >
+              Export CSV
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="rounded-xl bg-gradient-to-r from-brand to-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            + Create User
+          </button>
+        </div>
       </div>
 
       <Card className="p-5">
@@ -156,11 +219,11 @@ export default function AdminUsersPage() {
                       <StatusBadge status={u.status} />
                     </td>
                     <td className="px-5 py-3.5 font-semibold text-ink">{u.level}</td>
-                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{u.xp.toLocaleString()}</td>
+                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{(u.xp ?? 0).toLocaleString()}</td>
                     <td className="px-5 py-3.5">
-                      {u.streak > 0 && <span className="font-semibold text-accent">🔥 {u.streak}d</span>}
+                      {(u.streak ?? 0) > 0 && <span className="font-semibold text-accent">🔥 {u.streak}d</span>}
                     </td>
-                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{u.lessons}</td>
+                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{u.lessons ?? 0}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
                         <select
@@ -183,6 +246,14 @@ export default function AdminUsersPage() {
                           }`}
                         >
                           {u.status === "banned" ? "Unban" : "Ban"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(u)}
+                          className="rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                          title="Delete user permanently"
+                        >
+                          🗑
                         </button>
                       </div>
                     </td>
@@ -231,6 +302,13 @@ export default function AdminUsersPage() {
         />
       )}
 
+      {showCreateModal && (
+        <CreateUserModal
+          onClose={() => setShowCreateModal(false)}
+          onCreate={handleCreateUser}
+        />
+      )}
+
       <ConfirmModal
         open={!!banTarget}
         title={banTarget?.status === "banned" ? "Reactivate user" : `Ban ${banTarget?.name}?`}
@@ -243,6 +321,135 @@ export default function AdminUsersPage() {
         onConfirm={() => banTarget && handleBan(banTarget, banTarget.status !== "banned")}
         onClose={() => setBanTarget(null)}
       />
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={`Delete ${deleteTarget?.name}?`}
+        message="This action is permanent and cannot be undone. All user data, including progress, posts, and settings, will be permanently deleted."
+        confirmLabel="Delete permanently"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </div>
+  );
+}
+
+function CreateUserModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (data: { fullname: string; email: string; password: string; role: UserRole }) => void;
+}) {
+  const [fullname, setFullname] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>("user");
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<{ fullname?: string; email?: string; password?: string }>({});
+
+  function validate(): boolean {
+    const e: typeof errors = {};
+    if (!fullname.trim()) e.fullname = "Name is required.";
+    else if (fullname.trim().length < 2) e.fullname = "Name must be at least 2 characters.";
+    if (!email.trim()) e.email = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email address.";
+    if (!password) e.password = "Password is required.";
+    else if (password.length < 6) e.password = "Password must be at least 6 characters.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validate()) return;
+    setBusy(true);
+    await onCreate({ fullname: fullname.trim(), email: email.trim(), password, role });
+    setBusy(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-ink/40 backdrop-blur-sm" onClick={onClose}>
+      <aside
+        className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-line p-6">
+          <div>
+            <h2 className="text-lg font-bold text-ink">Create User</h2>
+            <p className="mt-1 text-xs text-ink-faint">Add a new user account to the platform.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-ink-faint hover:text-ink" aria-label="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-ink-faint">Full name</label>
+            <input
+              type="text"
+              value={fullname}
+              onChange={(e) => { setFullname(e.target.value); setErrors((p) => ({ ...p, fullname: undefined })); }}
+              className={`${inputCls} mt-2 ${errors.fullname ? "border-danger" : ""}`}
+              placeholder="e.g. Juan Dela Cruz"
+            />
+            {errors.fullname && <p className="mt-1 text-xs text-danger">{errors.fullname}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-ink-faint">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}
+              className={`${inputCls} mt-2 ${errors.email ? "border-danger" : ""}`}
+              placeholder="user@example.com"
+            />
+            {errors.email && <p className="mt-1 text-xs text-danger">{errors.email}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-ink-faint">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: undefined })); }}
+              className={`${inputCls} mt-2 ${errors.password ? "border-danger" : ""}`}
+              placeholder="Min 6 characters"
+            />
+            {errors.password && <p className="mt-1 text-xs text-danger">{errors.password}</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-ink-faint">Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as UserRole)}
+              className={`${selectCls} mt-2`}
+            >
+              <option value="user">User</option>
+              <option value="moderator">Moderator</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm font-semibold text-ink"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="flex-1 rounded-xl bg-gradient-to-r from-brand to-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </aside>
     </div>
   );
 }
@@ -292,12 +499,12 @@ function UserDrawer({
             <div className="space-y-6 p-6">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Level", value: user.level },
-                  { label: "XP", value: user.xp.toLocaleString() },
-                  { label: "Streak", value: `${user.streak} days` },
-                  { label: "Lessons", value: user.lessons },
-                  { label: "Coins", value: user.totalCoins.toLocaleString() },
-                  { label: "Daily goal", value: `${user.dailyGoal} XP` },
+                  { label: "Level", value: user.level ?? "beginner" },
+                  { label: "XP", value: (user.xp ?? 0).toLocaleString() },
+                  { label: "Streak", value: `${user.streak ?? 0} days` },
+                  { label: "Lessons", value: user.lessons ?? 0 },
+                  { label: "Coins", value: (user.totalCoins ?? 0).toLocaleString() },
+                  { label: "Daily goal", value: `${user.dailyGoal ?? 50} XP` },
                 ].map((s) => (
                   <div key={s.label} className="rounded-2xl border border-line bg-surface p-4">
                     <p className="text-xs text-ink-faint">{s.label}</p>
@@ -309,7 +516,10 @@ function UserDrawer({
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wide text-ink-faint">Badges</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {user.badges.map((b) => (
+                  {(user.badges ?? []).length === 0 && (
+                    <span className="text-xs text-ink-faint">No badges yet</span>
+                  )}
+                  {(user.badges ?? []).map((b) => (
                     <span key={b} className="rounded-full bg-brand-light px-3 py-1 text-xs font-semibold text-brand-dark">
                       {b}
                     </span>
@@ -320,7 +530,10 @@ function UserDrawer({
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wide text-ink-faint">Weak areas</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {user.weakAreas.map((w) => (
+                  {(user.weakAreas ?? []).length === 0 && (
+                    <span className="text-xs text-ink-faint">None identified</span>
+                  )}
+                  {(user.weakAreas ?? []).map((w) => (
                     <span key={w} className="rounded-full bg-accent-light px-3 py-1 text-xs font-semibold text-[#b45309]">
                       {w}
                     </span>
@@ -365,8 +578,8 @@ function UserDrawer({
               <div className="rounded-2xl bg-surface p-4 text-xs text-ink-soft">
                 <p>Joined: {new Date(user.joinedAt).toLocaleDateString()}</p>
                 <p className="mt-1">Last active: {new Date(user.lastActive).toLocaleString()}</p>
-                <p className="mt-1">Favorite category: {user.favoriteCategory}</p>
-                <p className="mt-1">Feedback submitted: {user.feedbackCount}</p>
+                <p className="mt-1">Favorite category: {user.favoriteCategory ?? "general"}</p>
+                <p className="mt-1">Feedback submitted: {user.feedbackCount ?? 0}</p>
               </div>
             </div>
           </>

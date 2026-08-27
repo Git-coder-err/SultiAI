@@ -4,6 +4,7 @@ import { Avatar, Card, EmptyState, ErrorState, LoadingState, StatusBadge, inputC
 import { useToast } from "@/components/Toast";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
+import { downloadCsv } from "@/lib/export";
 import { useState } from "react";
 
 export default function AdminFeedbackPage() {
@@ -33,7 +34,33 @@ export default function AdminFeedbackPage() {
             {data?.length ?? 0} submissions · {data?.filter((f) => !f.resolved).length ?? 0} open
           </p>
         </div>
-        <input className={`${inputCls} max-w-xs`} placeholder="Search by user..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex items-center gap-3">
+          {data && data.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  data!.map((f) => ({
+                    id: f.id,
+                    user: f.user.name,
+                    email: f.user.email,
+                    functionality: f.functionality,
+                    usability: f.usability,
+                    reliability: f.reliability,
+                    comment: f.comment ?? "",
+                    resolved: f.resolved,
+                    createdAt: f.createdAt,
+                  })),
+                  `sultiai-feedback-${new Date().toISOString().split("T")[0]}.csv`
+                )
+              }
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+            >
+              Export CSV
+            </button>
+          )}
+          <input className={`${inputCls} max-w-xs`} placeholder="Search by user..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
 
       {items.length === 0 ? (

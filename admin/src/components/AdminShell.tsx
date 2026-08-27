@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { sessionMock, useSession } from "@/lib/mock/session";
@@ -22,6 +22,7 @@ const nav = [
 
 export default function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const toast = useToast();
   const session = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -30,6 +31,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   async function handleSignOut() {
     await sessionMock.signOut();
     toast.push("info", "Signed out.");
+    router.push("/admin/login");
   }
 
   if (isLogin) return <>{children}</>;

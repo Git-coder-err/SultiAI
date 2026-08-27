@@ -4,6 +4,7 @@ import { Avatar, Card, EmptyState, ErrorState, LoadingState, StatusBadge } from 
 import { useToast } from "@/components/Toast";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
+import { downloadCsv } from "@/lib/export";
 import type { PreservedWord } from "@/types";
 
 export default function AdminPreservationPage() {
@@ -24,11 +25,36 @@ export default function AdminPreservationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">Preservation</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          Living Lexicon moderation — {words.length} words · {pending} pending review
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Preservation</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            Living Lexicon moderation — {words.length} words · {pending} pending review
+          </p>
+        </div>
+        {words.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              downloadCsv(
+                words.map((w) => ({
+                  id: w.id,
+                  word: w.word,
+                  dialect: w.dialect,
+                  meaning: w.meaning,
+                  variations: w.variations.join("; "),
+                  submittedBy: w.submittedBy.name,
+                  status: w.status,
+                  createdAt: w.createdAt,
+                })),
+                `sultiai-preserved-words-${new Date().toISOString().split("T")[0]}.csv`
+              )
+            }
+            className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+          >
+            Export CSV
+          </button>
+        )}
       </div>
 
       {words.length === 0 ? (

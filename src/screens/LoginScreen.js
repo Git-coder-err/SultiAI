@@ -5,8 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, shadows } from '../theme';
-import GoogleSignInButton, { Divider } from '../components/GoogleSignInButton';
+import GoogleSignInButton, { Divider, isGoogleConfigured } from '../components/GoogleSignInButton';
 import { useUser } from '../context/UserContext';
+import { supabase } from '../lib/supabase';
 
 function SlideInView({ delay = 0, children, style }) {
   const fade = useRef(new Animated.Value(0)).current;
@@ -102,15 +103,13 @@ export default function LoginScreen({ navigation }) {
 
         <SlideInView delay={400} style={[styles.buttonGroup, { marginBottom: insets.bottom + 16 }]}>
           <GoogleSignInButton
-            onSuccess={async (idToken) => {
-              const result = await signInWithGoogle(idToken);
-              if (result.success) {
-                // UserContext sets user → AppNavigator auto-switches to Main tabs
-              }
+            onSuccess={async () => {
+              // Supabase OAuth handles the session via onAuthStateChange in UserContext
+              // No need to call signInWithGoogle - the session is created automatically
+              console.log('Google sign-in initiated - session will be set by onAuthStateChange');
             }}
             onError={(err) => console.warn('Google sign-in error:', err)}
           />
-
           <Divider colors={colors} />
 
           <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('SignIn')}

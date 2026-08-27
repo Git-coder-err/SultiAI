@@ -34,12 +34,22 @@ export default function AdminSettingsPage() {
 
   async function handleSave() {
     if (!form) return;
+    if (form.dailyXpGoal !== undefined && form.dailyXpGoal < 10) {
+      toast.push("error", "Daily XP goal must be at least 10.");
+      return;
+    }
+    if (form.maxDailyAiRequests !== undefined && form.maxDailyAiRequests < 1) {
+      toast.push("error", "Max AI requests must be at least 1.");
+      return;
+    }
     setSaving(true);
     try {
       await api.updateSettings(form);
       toast.push("success", "Settings saved.");
       setForm(null);
       reload();
+    } catch (err: any) {
+      toast.push("error", err?.message || "Failed to save settings.");
     } finally {
       setSaving(false);
     }

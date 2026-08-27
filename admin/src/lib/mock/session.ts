@@ -67,75 +67,37 @@ export const sessionMock = {
     return currentSession;
   },
 
-  async signIn(): Promise<AdminSession> {
-    // Use real backend auth
+  async signIn(email: string, password: string): Promise<AdminSession> {
     const res = await fetch(`${API_BASE}/api/health`);
-    const health = await res.json();
+    if (!res.ok) {
+      throw new Error("Cannot reach the server. Make sure it is running on port 3001.");
+    }
 
-    // For now, use a hardcoded admin — in production, use proper login form
-    // This creates a session with a real JWT
     const loginRes = await fetch(`${API_BASE}/api/auth/signin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "admin@sultiai.com",
-        password: "admin123",
-      }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (!loginRes.ok) {
-      // Fallback: create the admin account if it doesn't exist
-      const signupRes = await fetch(`${API_BASE}/api/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullname: "Admin",
-          email: "admin@sultiai.com",
-          password: "admin123",
-        }),
-      });
-
-      if (!signupRes.ok) {
-        throw new Error("Failed to create admin account");
-      }
-
-      const signupData = await signupRes.json();
-      const data = signupData.data || signupRes.json;
-
-      // Promote to admin
-      await fetch(`${API_BASE}/api/auth/promote`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${data.accessToken}`,
-        },
-        body: JSON.stringify({ email: "admin@sultiai.com" }),
-      });
-
-      const session: AdminSession = {
-        id: String(data.user?.id ?? "1"),
-        name: data.user?.fullname ?? "Admin",
-        email: data.user?.email ?? "admin@sultiai.com",
-        provider: "email",
-        role: "admin",
-        avatar: "A",
-        signedInAt: new Date().toISOString(),
-        token: data.accessToken,
-      };
-      commit(session);
-      return session;
+      const err = await loginRes.json().catch(() => ({}));
+      throw new Error(err.error || "Invalid email or password.");
     }
 
     const signinData = await loginRes.json();
     const d = signinData.data || signinData;
 
+    if (d.user?.role !== "admin") {
+      throw new Error("Access denied. This account does not have admin privileges.");
+    }
+
     const session: AdminSession = {
       id: String(d.user?.id ?? "1"),
       name: d.user?.fullname ?? "Admin",
-      email: d.user?.email ?? "admin@sultiai.com",
+      email: d.user?.email ?? email,
       provider: "email",
-      role: "admin",
-      avatar: "A",
+      role: d.user?.role ?? "admin",
+      avatar: (d.user?.fullname ?? "A").charAt(0).toUpperCase(),
       signedInAt: new Date().toISOString(),
       token: d.accessToken,
     };
@@ -144,6 +106,21 @@ export const sessionMock = {
   },
 
   async signOut(): Promise<void> {
+    const session = currentSession;
+    if (session?.token) {
+      try {
+        await fetch(`${API_BASE}/api/auth/signout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.token}`,
+          },
+          body: JSON.stringify({ refreshToken: (session as any).refreshToken }),
+        });
+      } catch {
+        // Ignore signout errors — clear local session regardless
+      }
+    }
     commit(null);
   },
 };

@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { Avatar, Card, EmptyState, ErrorState, LoadingState, StatusBadge } from "@/components/ui";
+import { downloadCsv } from "@/lib/export";
 
 type Tab = "posts" | "reports";
 
@@ -47,9 +48,38 @@ export default function AdminCommunityPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">Community</h1>
-        <p className="mt-1 text-sm text-ink-soft">Moderate posts, comments, and user reports.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">Community</h1>
+          <p className="mt-1 text-sm text-ink-soft">Moderate posts, comments, and user reports.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {posts.data && posts.data.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  posts.data!.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    author: p.author.name,
+                    category: p.category,
+                    likes: p.likes,
+                    comments: p.comments,
+                    reports: p.reports,
+                    featured: p.featured,
+                    hidden: p.hidden,
+                    createdAt: p.createdAt,
+                  })),
+                  `sultiai-community-posts-${new Date().toISOString().split("T")[0]}.csv`
+                )
+              }
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+            >
+              Export Posts
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="inline-flex rounded-xl border border-line bg-white p-1">

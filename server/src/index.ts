@@ -2,7 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { connect, closeAll } from './db/connection';
+import { connect, closeAll, getDb } from './db/connection';
+import { sql } from 'drizzle-orm';
 import { connectMongo, closeMongo } from './db/mongodb/connection';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { isGroqConfigured } from './utils/groq';
@@ -148,6 +149,15 @@ async function start() {
     validateEnv();
     connect();
     await connectMongo();
+
+    // Ensure google_id column exists (added in latest migration)
+    try {
+      const db = getDb();
+      (db as any).$client.exec(`ALTER TABLE users ADD COLUMN google_id TEXT`);
+      logger.info('Added google_id column to users table');
+    } catch {
+      // Column already exists — ignore
+    }
 
     if (!isGroqConfigured()) {
       logger.info('Initializing local LLM model...');

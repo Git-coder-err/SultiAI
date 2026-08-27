@@ -5,6 +5,7 @@ import { StatCard } from "@/components/StatCard";
 import { Avatar, Card, CardHeader, ErrorState, LoadingState } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
+import { downloadCsv } from "@/lib/export";
 
 export default function AdminXpPage() {
   const { data, loading, error, reload } = useAsync(() => api.getXpOverview(), []);
@@ -14,9 +15,29 @@ export default function AdminXpPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-ink">XP & Rewards</h1>
-        <p className="mt-1 text-sm text-ink-soft">Gamification metrics and top learners.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-ink">XP & Rewards</h1>
+          <p className="mt-1 text-sm text-ink-soft">Gamification metrics and top learners.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            downloadCsv(
+              data.topUsers.map((u, i) => ({
+                rank: i + 1,
+                name: u.name,
+                level: u.level,
+                xp: u.xp,
+                streak: u.streak,
+              })),
+              `sultiai-top-learners-${new Date().toISOString().split("T")[0]}.csv`
+            )
+          }
+          className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-brand"
+        >
+          Export Top Learners
+        </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

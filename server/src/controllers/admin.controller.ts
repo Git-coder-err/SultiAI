@@ -17,6 +17,43 @@ function daysAgo(n: number): string {
   return d.toISOString().split('T')[0];
 }
 
+/** Convert level string or XP to a numeric level for the admin UI */
+function levelToNumber(level: string | null | undefined, totalXp: number): number {
+  if (totalXp >= 5000) return 15;
+  if (totalXp >= 3500) return 12;
+  if (totalXp >= 2500) return 10;
+  if (totalXp >= 1800) return 8;
+  if (totalXp >= 1200) return 6;
+  if (totalXp >= 700) return 5;
+  if (totalXp >= 400) return 4;
+  if (totalXp >= 200) return 3;
+  if (totalXp >= 80) return 2;
+  return 1;
+}
+
+/** Get user status from audit_logs (most recent ban/suspend action) */
+async function getUserStatus(db: any, userId: number): Promise<string> {
+  const [lastBan] = await db.select({ action: schema.auditLogs.action })
+    .from(schema.auditLogs)
+    .where(
+      and(
+        eq(schema.auditLogs.userId, userId),
+        or(
+          eq(schema.auditLogs.action, 'ban_user'),
+          eq(schema.auditLogs.action, 'suspend_user'),
+          eq(schema.auditLogs.action, 'unban_user'),
+        )
+      )
+    )
+    .orderBy(desc(schema.auditLogs.timestamp))
+    .limit(1);
+
+  if (!lastBan) return 'active';
+  if (lastBan.action === 'ban_user') return 'banned';
+  if (lastBan.action === 'suspend_user') return 'suspended';
+  return 'active';
+}
+
 // ── Overview / Dashboard ──────────────────────────────────────────
 
 export async function getOverview(_req: Request, res: Response): Promise<void> {
@@ -139,6 +176,7 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
     const offset = (page - 1) * perPage;
     const search = (req.query.search as string) || '';
     const roleFilter = (req.query.role as string) || 'all';
+    const statusFilter = (req.query.status as string) || 'all';
     const sort = (req.query.sort as string) || 'recent';
 
     // Build conditions
@@ -183,13 +221,13 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
       .limit(perPage)
       .offset(offset);
 
-    const items = rows.map((r: any) => ({
+    const items = await Promise.all(rows.map(async (r: any) => ({
       id: r.userId,
       name: r.fullname || 'Unknown',
       email: r.email,
       role: r.role || 'user',
-      status: 'active',
-      level: r.level || 'beginner',
+      status: await getUserStatus(db, r.userId),
+      level: levelToNumber(r.level, num(r.totalXp)),
       xp: num(r.totalXp),
       streak: num(r.streak),
       lessons: num(r.totalSessions),
@@ -197,9 +235,18 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
       nativeSpeaker: false,
       joinedAt: r.createdAt || new Date().toISOString(),
       lastActive: r.lastActive || r.createdAt || new Date().toISOString(),
-    }));
+      country: r.country,
+    })));
 
-    success(res, { items, total, page, perPage }, 'Users loaded');
+    // Filter by status if requested (status is in audit_logs, filter after fetch)
+    const filteredItems = statusFilter !== 'all'
+      ? items.filter((u) => u.status === statusFilter)
+      : items;
+
+    // Recount total if status filtering was applied
+    const finalTotal = statusFilter !== 'all' ? filteredItems.length : total;
+
+    success(res, { items: filteredItems, total: finalTotal, page, perPage }, 'Users loaded');
   } catch (err) {
     logger.error('Admin list users error', { error: (err as Error).message });
     errors.internal(res, 'Failed to list users');
@@ -239,18 +286,20 @@ export async function getUser(req: Request, res: Response): Promise<void> {
     const [feedbackRow] = await (db as any).select({ c: count() }).from(schema.feedback)
       .where(eq(schema.feedback.userId, userId));
 
+    const userStatus = await getUserStatus(db, userId);
+
     success(res, {
       detail: {
         id: userId,
         name: user.fullname || 'Unknown',
         email: user.email,
         role: user.role || 'user',
-        status: 'active',
-        level: profile?.level || 'beginner',
+        status: userStatus,
+        level: levelToNumber(profile?.level, num(profile?.totalXp)),
         xp: num(profile?.totalXp),
         streak: num(profile?.streak),
         lessons: num(profile?.totalSessions),
-        verified: false,
+        verified: (user.isVerified || 0) === 1,
         nativeSpeaker: false,
         joinedAt: user.createdAt || new Date().toISOString(),
         lastActive: profile?.lastActive || user.createdAt || new Date().toISOString(),
@@ -288,13 +337,176 @@ export async function updateUserRole(req: Request, res: Response): Promise<void>
   }
 }
 
-export async function updateUserStatus(_req: Request, res: Response): Promise<void> {
-  // Status is not in the schema — just return success for now
-  success(res, { status: 'active' }, 'Status updated');
+export async function updateUserStatus(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const userId = Number(req.params.id);
+    const { status } = req.body;
+
+    if (!['active', 'banned', 'suspended'].includes(status)) {
+      errors.validation(res, 'Invalid status');
+      return;
+    }
+
+    // Status is stored in user_settings or we can add it to users table
+    // For now, use audit_logs to track ban/unban actions
+    await (db as any).insert(schema.auditLogs).values({
+      userId,
+      action: status === 'banned' ? 'ban_user' : status === 'suspended' ? 'suspend_user' : 'unban_user',
+      resourceType: 'user',
+      resourceId: String(userId),
+      details: JSON.stringify({ status, changedBy: req.user?.userId }),
+    });
+
+    success(res, { id: userId, status }, 'Status updated');
+  } catch (err) {
+    logger.error('Admin update status error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update status');
+  }
 }
 
-export async function verifyUser(_req: Request, res: Response): Promise<void> {
-  success(res, { verified: true }, 'User verified');
+export async function verifyUser(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const userId = Number(req.params.id);
+    const { verified } = req.body;
+
+    await (db as any).update(schema.users)
+      .set({ isVerified: verified ? 1 : 0 })
+      .where(eq(schema.users.userId, userId));
+
+    await (db as any).insert(schema.auditLogs).values({
+      userId,
+      action: verified ? 'verify_user' : 'unverify_user',
+      resourceType: 'user',
+      resourceId: String(userId),
+      details: JSON.stringify({ verified, changedBy: req.user?.userId }),
+    });
+
+    success(res, { id: userId, verified }, 'User verified');
+  } catch (err) {
+    logger.error('Admin verify user error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to verify user');
+  }
+}
+
+export async function createUser(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const { fullname, email, password, role } = req.body;
+
+    if (!fullname || !email || !password) {
+      errors.validation(res, 'fullname, email, and password are required');
+      return;
+    }
+
+    if (!['user', 'admin', 'moderator'].includes(role || 'user')) {
+      errors.validation(res, 'Invalid role');
+      return;
+    }
+
+    // Check for existing email
+    const existing = await (db as any).select({ userId: schema.users.userId })
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+
+    if (existing.length > 0) {
+      errors.conflict(res, 'A user with this email already exists');
+      return;
+    }
+
+    // Hash password
+    const { hashPassword } = await import('../utils/crypto');
+    const passwordHash = hashPassword(password);
+
+    // Insert user
+    const result = await (db as any).insert(schema.users).values({
+      fullname,
+      email,
+      passwordHash,
+      role: role || 'user',
+    });
+
+    const newUserId = result.lastInsertRowid;
+
+    // Create learner profile
+    await (db as any).insert(schema.learnerProfiles).values({
+      userId: newUserId,
+      level: 'beginner',
+      totalXp: 0,
+      coins: 0,
+      streak: 0,
+      dailyXp: 0,
+      dailyGoal: 50,
+      totalSessions: 0,
+    });
+
+    // Audit log
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'create_user',
+      resourceType: 'user',
+      resourceId: String(newUserId),
+      details: JSON.stringify({ email, role: role || 'user' }),
+    });
+
+    success(res, {
+      id: newUserId,
+      name: fullname,
+      email,
+      role: role || 'user',
+    }, 'User created');
+  } catch (err) {
+    logger.error('Admin create user error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to create user');
+  }
+}
+
+export async function deleteUser(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const userId = Number(req.params.id);
+
+    // Check user exists
+    const rows = await (db as any).select({ userId: schema.users.userId, role: schema.users.role })
+      .from(schema.users)
+      .where(eq(schema.users.userId, userId))
+      .limit(1);
+
+    if (!rows.length) {
+      errors.notFound(res, 'User not found');
+      return;
+    }
+
+    // Prevent deleting the last admin
+    if (rows[0].role === 'admin') {
+      const [adminCount] = await (db as any).select({ c: count() })
+        .from(schema.users)
+        .where(eq(schema.users.role, 'admin'));
+      if (num(adminCount?.c) <= 1) {
+        errors.validation(res, 'Cannot delete the last admin user');
+        return;
+      }
+    }
+
+    // Delete user (cascades via foreign keys)
+    await (db as any).delete(schema.users).where(eq(schema.users.userId, userId));
+
+    // Audit log (use raw insert since user is deleted)
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'delete_user',
+      resourceType: 'user',
+      resourceId: String(userId),
+      details: JSON.stringify({ deletedUserRole: rows[0].role }),
+    });
+
+    success(res, null, 'User deleted');
+  } catch (err) {
+    logger.error('Admin delete user error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to delete user');
+  }
 }
 
 // ── Lessons ───────────────────────────────────────────────────────
@@ -425,12 +637,43 @@ export async function listPosts(_req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function toggleFeatured(_req: Request, res: Response): Promise<void> {
-  success(res, { featured: true }, 'Post featured');
+export async function toggleFeatured(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const postId = Number(req.params.id);
+    const { featured } = req.body;
+
+    await (db as any).update(schema.communityPosts)
+      .set({ isFeatured: featured ? 1 : 0 })
+      .where(eq(schema.communityPosts.postId, postId));
+
+    success(res, { id: postId, featured: !!featured }, featured ? 'Post featured' : 'Post unfeatured');
+  } catch (err) {
+    logger.error('Admin toggle featured error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update post');
+  }
 }
 
-export async function setPostHidden(_req: Request, res: Response): Promise<void> {
-  success(res, { hidden: true }, 'Post hidden');
+export async function setPostHidden(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const postId = Number(req.params.id);
+    const { hidden } = req.body;
+
+    // hidden status is tracked via is_featured inverse or audit log
+    // For now, log the action and return the state
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: hidden ? 'hide_post' : 'unhide_post',
+      resourceType: 'post',
+      resourceId: String(postId),
+    });
+
+    success(res, { id: postId, hidden: !!hidden }, hidden ? 'Post hidden' : 'Post visible');
+  } catch (err) {
+    logger.error('Admin set post hidden error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update post');
+  }
 }
 
 export async function deletePost(req: Request, res: Response): Promise<void> {
@@ -446,11 +689,58 @@ export async function deletePost(req: Request, res: Response): Promise<void> {
 }
 
 export async function listReports(_req: Request, res: Response): Promise<void> {
-  success(res, [], 'No reports');
+  try {
+    const db = getDb();
+    const rows = await (db as any).select({
+      reportId: schema.communityReports.reportId,
+      postId: schema.communityReports.postId,
+      reporterId: schema.communityReports.reporterId,
+      reason: schema.communityReports.reason,
+      status: schema.communityReports.status,
+      createdAt: schema.communityReports.createdAt,
+      reporterName: schema.users.fullname,
+    })
+      .from(schema.communityReports)
+      .leftJoin(schema.users, eq(schema.communityReports.reporterId, schema.users.userId))
+      .orderBy(desc(schema.communityReports.createdAt))
+      .limit(50);
+
+    const reports = rows.map((r: any) => ({
+      id: r.reportId,
+      postId: r.postId,
+      reportedBy: { id: r.reporterId || 0, name: r.reporterName || 'Unknown' },
+      reason: r.reason || '',
+      status: r.status || 'open',
+      createdAt: r.createdAt || new Date().toISOString(),
+    }));
+
+    success(res, reports, 'Reports loaded');
+  } catch (err) {
+    logger.error('Admin list reports error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to list reports');
+  }
 }
 
-export async function updateReportStatus(_req: Request, res: Response): Promise<void> {
-  success(res, { status: 'resolved' }, 'Report updated');
+export async function updateReportStatus(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const reportId = Number(req.params.id);
+    const { status } = req.body;
+
+    if (!['open', 'resolved', 'dismissed'].includes(status)) {
+      errors.validation(res, 'Invalid status');
+      return;
+    }
+
+    await (db as any).update(schema.communityReports)
+      .set({ status })
+      .where(eq(schema.communityReports.reportId, reportId));
+
+    success(res, { id: reportId, status }, 'Report updated');
+  } catch (err) {
+    logger.error('Admin update report error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update report');
+  }
 }
 
 // ── AI Usage ──────────────────────────────────────────────────────
@@ -551,7 +841,7 @@ export async function getXpOverview(_req: Request, res: Response): Promise<void>
     const topUsers = topRows.map((r: any) => ({
       id: r.userId,
       name: r.fullname || 'Unknown',
-      level: r.level || 'beginner',
+      level: levelToNumber(r.level, num(r.totalXp)),
       xp: num(r.totalXp),
       streak: num(r.streak),
     }));
@@ -605,8 +895,21 @@ export async function listFeedback(_req: Request, res: Response): Promise<void> 
   }
 }
 
-export async function resolveFeedback(_req: Request, res: Response): Promise<void> {
-  success(res, { resolved: true }, 'Feedback resolved');
+export async function resolveFeedback(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const feedbackId = Number(req.params.id);
+    const { resolved } = req.body;
+
+    await (db as any).update(schema.feedback)
+      .set({ resolved: resolved ? 1 : 0 })
+      .where(eq(schema.feedback.feedbackId, feedbackId));
+
+    success(res, { id: feedbackId, resolved: !!resolved }, resolved ? 'Feedback resolved' : 'Feedback reopened');
+  } catch (err) {
+    logger.error('Admin resolve feedback error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update feedback');
+  }
 }
 
 // ── Preservation ──────────────────────────────────────────────────
@@ -700,6 +1003,33 @@ export async function getSettings(_req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function updateSettings(_req: Request, res: Response): Promise<void> {
-  success(res, { updatedAt: new Date().toISOString() }, 'Settings updated');
+export async function updateSettings(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const { maintenanceMode, allowSignups, allowCommunity, requireVerificationForCommunity, dailyXpGoal, maxDailyAiRequests, aiProvider } = req.body;
+
+    // Store settings as key-value pairs in audit_logs (or a dedicated settings table)
+    const settingsData = {
+      maintenanceMode: !!maintenanceMode,
+      allowSignups: allowSignups !== false,
+      allowCommunity: allowCommunity !== false,
+      requireVerificationForCommunity: !!requireVerificationForCommunity,
+      dailyXpGoal: Number(dailyXpGoal) || 50,
+      maxDailyAiRequests: Number(maxDailyAiRequests) || 100,
+      aiProvider: aiProvider || 'auto',
+    };
+
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'update_settings',
+      resourceType: 'settings',
+      resourceId: 'platform',
+      details: JSON.stringify(settingsData),
+    });
+
+    success(res, { ...settingsData, updatedAt: new Date().toISOString() }, 'Settings updated');
+  } catch (err) {
+    logger.error('Admin update settings error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to update settings');
+  }
 }
