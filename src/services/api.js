@@ -7,7 +7,9 @@ async function getToken() {
     // Try Supabase session first
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) return session.access_token;
-  } catch {}
+  } catch (err) {
+    console.warn('[api] Failed to get Supabase session:', err.message);
+  }
   return null;
 }
 
@@ -19,7 +21,25 @@ async function request(method, path, body = null) {
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
 
-  const res = await fetch(`${BASE_URL}${path}`, opts);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  opts.signal = controller.signal;
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, opts);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    if (err instanceof TypeError) {
+      throw new Error('No internet connection. Please check your network and try again.');
+    }
+    throw new Error(err.message || 'Network request failed');
+  }
+  clearTimeout(timeoutId);
+
   const data = await res.json();
   if (!res.ok) throw new Error((data && data.error && (data.error.message || data.error)) || 'Request failed');
   return data && typeof data === 'object' && 'data' in data ? data.data : data;

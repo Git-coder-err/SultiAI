@@ -62,3 +62,18 @@ coverage
 .claude/
 .crush/
 .grok/
+
+# AI service (large binaries, virtual envs)
+ai-service/.venv/
+ai-service/ffmpeg-*/
+ai-service/models/
+ai-service/__pycache__/
+ai-service/*.pyc
+
+# Supabase
+supabase/.temp/
+
+# Next.js
+.next/
+admin/.next/
+web/.next/

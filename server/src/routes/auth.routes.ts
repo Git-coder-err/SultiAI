@@ -3,6 +3,8 @@ import { authRateLimit } from '../middleware/rateLimit';
 import { validate, validators } from '../middleware/validate';
 import { signUp, signIn, refreshToken, signOut, clerkSync, googleSignIn, syncSupabase } from '../controllers/auth.controller';
 import { createClient } from '@supabase/supabase-js';
+import { success, errors } from '../utils/apiResponse';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -28,7 +30,7 @@ router.post('/signout', signOut);
 router.post('/confirm-user', async (req, res) => {
   const { email, userId } = req.body || {};
   if (!email || !userId) {
-    res.status(400).json({ error: 'email and userId required' });
+    errors.validation(res, 'email and userId required');
     return;
   }
 
@@ -36,7 +38,7 @@ router.post('/confirm-user', async (req, res) => {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    res.status(503).json({ error: 'Supabase admin not configured' });
+    errors.internal(res, 'Supabase admin not configured');
     return;
   }
 
@@ -47,10 +49,10 @@ router.post('/confirm-user', async (req, res) => {
     });
 
     if (error) throw error;
-    res.json({ message: 'User confirmed', userId: data.user.id });
+    success(res, { userId: data.user.id }, 'User confirmed');
   } catch (err) {
-    console.error('[Auth] Auto-confirm error:', (err as Error).message);
-    res.status(500).json({ error: 'Failed to confirm user' });
+    logger.error('[Auth] Auto-confirm error:', { error: (err as Error).message });
+    errors.internal(res, 'Failed to confirm user');
   }
 });
 
@@ -58,7 +60,7 @@ router.post('/confirm-user', async (req, res) => {
 router.post('/promote', async (req, res) => {
   const { email, secret } = req.body || {};
   if (!email) {
-    res.status(400).json({ error: 'Email required' });
+    errors.validation(res, 'Email required');
     return;
   }
   // Simple bootstrap protection: require a secret or allow if no admins exist yet
@@ -77,16 +79,17 @@ router.post('/promote', async (req, res) => {
     const validSecret = secret === (process.env.JWT_SECRET || 'dev-secret-key-12345');
 
     if (!isFirstAdmin && !validSecret) {
-      res.status(403).json({ error: 'Admin secret required' });
+      errors.forbidden(res, 'Admin secret required');
       return;
     }
 
     await (db as any).update(schema.users)
       .set({ role: 'admin' })
       .where(eq(schema.users.email, email));
-    res.json({ message: `User ${email} promoted to admin` });
+    success(res, null, `User ${email} promoted to admin`);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to promote user' });
+    logger.error('[Auth] Promote error:', { error: (err as Error).message });
+    errors.internal(res, 'Failed to promote user');
   }
 });
 

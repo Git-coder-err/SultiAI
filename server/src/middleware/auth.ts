@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken, JwtPayload } from '../utils/jwt';
 import { getDb } from '../db/connection';
 import { verifyCredentials } from '@supabase/server/core';
+import { errors } from '../utils/apiResponse';
 
 // Cache for Supabase UUID → local user ID mapping
 const userIdCache = new Map<string, number>();
@@ -35,7 +36,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   const credentials = extractCredentials(req);
 
   if (!credentials.token && !credentials.apikey) {
-    res.status(401).json({ error: 'Access token required' });
+    errors.unauthorized(res, 'Access token required');
     return;
   }
 
@@ -74,7 +75,9 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
               session.userId = existing.user_id;
               if (supabaseId) userIdCache.set(supabaseId, existing.user_id);
             }
-          } catch {}
+          } catch (dbErr) {
+            // DB lookup failed — userId stays 0
+          }
         }
 
         req.user = { ...session, id: session.userId };
@@ -92,5 +95,5 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return next();
   }
 
-  res.status(401).json({ error: 'Invalid or expired token' });
+  errors.unauthorized(res, 'Invalid or expired token');
 }

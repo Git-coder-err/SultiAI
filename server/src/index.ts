@@ -147,16 +147,18 @@ app.use(errorHandler);
 async function start() {
   try {
     validateEnv();
-    connect();
+    await connect();
     await connectMongo();
 
-    // Ensure google_id column exists (added in latest migration)
-    try {
-      const db = getDb();
-      (db as any).$client.exec(`ALTER TABLE users ADD COLUMN google_id TEXT`);
-      logger.info('Added google_id column to users table');
-    } catch {
-      // Column already exists — ignore
+    // Ensure google_id column exists (added in latest migration) — SQLite only
+    if (process.env.DB_DIALECT !== 'mysql') {
+      try {
+        const db = getDb();
+        (db as any).$client.exec(`ALTER TABLE users ADD COLUMN google_id TEXT`);
+        logger.info('Added google_id column to users table');
+      } catch {
+        // Column already exists — ignore
+      }
     }
 
     if (!isGroqConfigured()) {
@@ -196,6 +198,12 @@ async function start() {
 
 process.on('unhandledRejection', (err) => {
   logger.error('Unhandled rejection', { error: (err as Error).message });
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
+  process.exit(1);
 });
 
 process.on('SIGTERM', async () => {
