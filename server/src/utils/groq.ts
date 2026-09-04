@@ -1,11 +1,9 @@
+import { fetchWithRetry } from './fetchRetry';
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1';
-
-import { fetchWithRetry } from './fetchRetry';
-import { isLocalLLMReady, localLLMChat, localLLMJSON } from '../services/localLLM';
-import { isLocalSTTReady, localTranscribe } from '../services/sttService';
 
 interface GroqMessage {
   role: 'system' | 'user' | 'assistant';
@@ -22,11 +20,11 @@ export function isGroqConfigured(): boolean {
 }
 
 export function isConfigured(): boolean {
-  return isGroqConfigured() || isLocalLLMReady();
+  return isGroqConfigured();
 }
 
 export function isSTTConfigured(): boolean {
-  return isGroqConfigured() || isLocalSTTReady();
+  return isGroqConfigured();
 }
 
 async function groqChatRemote(
@@ -63,13 +61,7 @@ export async function groqChat(
   if (GROQ_API_KEY) {
     return groqChatRemote(messages, options);
   }
-  if (isLocalLLMReady()) {
-    return localLLMChat(messages, {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-    });
-  }
-  throw new Error('No LLM configured: set GROQ_API_KEY or initialize local LLM');
+  throw new Error('No LLM configured: set GROQ_API_KEY');
 }
 
 export async function groqTranscribeAudio(audioBase64: string, filename = 'recording.m4a', mimeType = 'audio/mp4'): Promise<string> {
@@ -103,11 +95,7 @@ export async function groqTranscribeAudio(audioBase64: string, filename = 'recor
     return data.text;
   }
 
-  if (isLocalSTTReady()) {
-    return localTranscribe(audioBase64, mimeType);
-  }
-
-  throw new Error('No STT configured: set GROQ_API_KEY or initialize local STT');
+  throw new Error('No STT configured: set GROQ_API_KEY');
 }
 
 export async function groqVision(
@@ -147,7 +135,7 @@ export async function groqVision(
     return data.choices[0].message.content;
   }
 
-  throw new Error('Vision requires GROQ_API_KEY or local vision model');
+  throw new Error('Vision requires GROQ_API_KEY');
 }
 
 export async function groqJson<T>(

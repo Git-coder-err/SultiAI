@@ -72,7 +72,7 @@ router.post('/chat', authMiddleware, async (req: Request, res: Response) => {
       return;
     }
     if (!isConfigured()) {
-      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY in server/.env' });
       return;
     }
 
@@ -99,7 +99,7 @@ router.post('/voice', authMiddleware, async (req: Request, res: Response) => {
       return;
     }
     if (!isConfigured()) {
-      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY in server/.env' });
       return;
     }
 
@@ -138,7 +138,7 @@ router.post('/phrases', authMiddleware, async (req: Request, res: Response) => {
       return;
     }
     if (!isConfigured()) {
-      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY or enable local LLM model' });
+      res.status(500).json({ error: 'AI service not configured: set GROQ_API_KEY in server/.env' });
       return;
     }
 

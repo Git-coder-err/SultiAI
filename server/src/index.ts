@@ -7,8 +7,6 @@ import { sql } from 'drizzle-orm';
 import { connectMongo, closeMongo } from './db/mongodb/connection';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { isGroqConfigured } from './utils/groq';
-import { isLocalLLMReady, ensureLocalLLM, getLocalLLMError } from './services/localLLM';
-import { isLocalSTTReady, ensureLocalSTT, getLocalSTTError } from './services/sttService';
 import { env, validateEnv } from './config';
 import { setSecurityHeaders, configureCors } from './middleware/security';
 import { globalRateLimit } from './middleware/rateLimit';
@@ -57,11 +55,8 @@ app.get('/api/health', (_req, res) => {
   success(res, {
     status: 'ok',
     groq: isGroqConfigured() ? 'configured' : 'not_set',
-    localLLM: isLocalLLMReady() ? 'ready' : 'initializing',
-    localLLMError: getLocalLLMError(),
-    localSTT: isLocalSTTReady() ? 'ready' : 'initializing',
-    localSTTError: getLocalSTTError(),
-    mode: isGroqConfigured() ? 'api' : (isLocalLLMReady() ? 'local' : 'none'),
+    aiProvider: isGroqConfigured() ? 'groq' : 'none',
+    mode: isGroqConfigured() ? 'api' : 'none',
   });
 });
 
@@ -100,7 +95,7 @@ app.post('/api/assistant/chat', authMiddleware, async (req, res) => {
     }
     const { isConfigured, groqChat } = await import('./utils/groq');
     if (!isConfigured()) {
-      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY or enable local LLM model');
+      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY in server/.env');
       return;
     }
     const systemPrompt = character
@@ -122,7 +117,7 @@ app.post('/api/groq', authMiddleware, async (req, res) => {
     const { messages, nativeLanguage } = req.body || {};
     const { isConfigured, groqChat } = await import('./utils/groq');
     if (!isConfigured()) {
-      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY or enable local LLM model');
+      errors.aiError(res, 'AI service not configured: set GROQ_API_KEY in server/.env');
       return;
     }
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -162,32 +157,12 @@ async function start() {
     }
 
     if (!isGroqConfigured()) {
-      logger.info('Initializing local LLM model...');
-      try {
-        await ensureLocalLLM();
-        logger.info('Local LLM ready', { status: isLocalLLMReady() });
-        if (getLocalLLMError()) {
-          logger.error('Local LLM error', { error: getLocalLLMError() });
-        }
-      } catch (err) {
-        logger.error('Local LLM init failed', { error: (err as Error).message });
-      }
-
-      logger.info('Initializing local STT model...');
-      try {
-        await ensureLocalSTT();
-        logger.info('Local STT ready', { status: isLocalSTTReady() });
-        if (getLocalSTTError()) {
-          logger.error('Local STT error', { error: getLocalSTTError() });
-        }
-      } catch (err) {
-        logger.error('Local STT init failed', { error: (err as Error).message });
-      }
+      logger.warn('GROQ_API_KEY is not set — AI endpoints will return 503 until it is configured.');
     }
 
     app.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server running on http://localhost:${env.PORT}`);
-      logger.info(`Mode: ${isGroqConfigured() ? 'API (Groq)' : (isLocalLLMReady() ? 'Local LLM' : 'No LLM available')}`);
+      logger.info(`Mode: ${isGroqConfigured() ? 'API (Groq)' : 'AI not configured — set GROQ_API_KEY'}`);
       logger.info(`Environment: ${env.NODE_ENV}`);
     });
   } catch (err) {
