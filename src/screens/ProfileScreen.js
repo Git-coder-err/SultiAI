@@ -6,6 +6,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGame } from '../context/GameContext';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useToast } from '../components/Toast';
 import { api } from '../services/api';
 import GlassCard from '../components/GlassCard';
 import Avatar from '../components/Avatar';
@@ -39,6 +40,7 @@ const THEME_MODES = [
 export default function ProfileScreen({ navigation }) {
   const { user, signOut, refreshProfile } = useUser();
   const { colors, isDark, themeMode, setThemeMode, reduceMotion, highContrast, largeText, toggleReduceMotion, toggleHighContrast, toggleLargeText, getAnimationDuration } = useTheme();
+  const toast = useToast();
   const { xp, coins, hearts, streak, badges, getLevelInfo } = useGame();
   const { enqueueAction } = useOfflineSync();
   const levelInfo = getLevelInfo(xp);
@@ -62,8 +64,8 @@ export default function ProfileScreen({ navigation }) {
 
   const DAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  const loadSettings = async () => { try { const d = await api.getUserSettings(); setSettings(d); } catch {} };
-  const loadSavedPhrases = async () => { try { const d = await api.getSavedPhrases(); setSavedPhrases(Array.isArray(d) ? d : []); } catch {} };
+  const loadSettings = async () => { try { const d = await api.getUserSettings(); setSettings(d); } catch (e) { console.warn('[Profile] Failed to load settings:', e.message); } };
+  const loadSavedPhrases = async () => { try { const d = await api.getSavedPhrases(); setSavedPhrases(Array.isArray(d) ? d : []); } catch (e) { console.warn('[Profile] Failed to load saved phrases:', e.message); } };
   const loadAnalytics = async () => {
     try {
       const weekly = await api.getWeeklyProgress();
@@ -76,7 +78,9 @@ export default function ProfileScreen({ navigation }) {
           }))
         );
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Profile] Failed to load weekly progress:', e.message);
+    }
     try {
       const modules = await api.getLearningProgress();
       if (Array.isArray(modules) && modules.length) {
@@ -91,7 +95,9 @@ export default function ProfileScreen({ navigation }) {
           .slice(0, 6);
         setModuleMastery(rows);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Profile] Failed to load learning progress:', e.message);
+    }
   };
 
   const loadHistory = async () => {
@@ -111,7 +117,8 @@ export default function ProfileScreen({ navigation }) {
       } else {
         setHistory([]);
       }
-    } catch {
+    } catch (e) {
+      console.warn('[Profile] Failed to load history:', e.message);
       setHistory([]);
     }
   };
@@ -120,7 +127,9 @@ export default function ProfileScreen({ navigation }) {
     try {
       await api.deleteHistory(id);
       setHistory((prev) => prev.filter((h) => h.id !== id));
-    } catch {}
+    } catch (e) {
+      console.warn('[Profile] Failed to delete history:', e.message);
+    }
   };
 
   useEffect(() => {
@@ -140,7 +149,7 @@ export default function ProfileScreen({ navigation }) {
       await refreshProfile();
       setEditing(false);
       enqueueAction({ endpoint: '/api/user/me', method: 'PUT', payload: { name: editName, country: editCountry } });
-    } catch (err) { Alert.alert('Error', err.message); }
+    } catch (err) { toast.error(err.message || 'Failed to save profile.'); }
     finally { setSaving(false); }
   };
 
@@ -149,7 +158,7 @@ export default function ProfileScreen({ navigation }) {
       await api.deleteSavedPhrase(id);
       setSavedPhrases(prev => prev.filter(p => p.phrase_id !== id));
       enqueueAction({ endpoint: `/api/saved-phrases/${id}`, method: 'POST', payload: { deleted: true } });
-    } catch (err) { Alert.alert('Error', err.message); }
+    } catch (err) { toast.error(err.message || 'Failed to delete phrase.'); }
   };
 
   const handleSignOut = async () => {

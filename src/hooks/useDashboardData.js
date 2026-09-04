@@ -69,7 +69,9 @@ export function useDashboardData() {
       if (mistakesResult.status === 'fulfilled' && Array.isArray(mistakesResult.value)) {
         setMistakes(mistakesResult.value);
       }
-    } catch {} finally {
+    } catch (e) {
+      console.warn('[Dashboard] Failed to load data:', e.message);
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -80,7 +82,9 @@ export function useDashboardData() {
       setNotifications((prev) =>
         prev.map((n) => (n.id === notifId ? { ...n, is_read: true } : n)),
       );
-    } catch {}
+    } catch (e) {
+      console.warn('[Dashboard] Failed to mark notification read:', e.message);
+    }
   }, []);
 
   const refresh = useCallback(async () => {

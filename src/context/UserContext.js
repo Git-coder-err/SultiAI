@@ -242,14 +242,18 @@ export function UserProvider({ children }) {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) setUser(normalizeUser(currentUser));
-    } catch {}
+    } catch (e) {
+      console.warn('[UserContext] Failed to refresh profile:', e.message);
+    }
   }, []);
 
   const refreshLevel = useCallback(async () => {
     try {
       const lvl = await api.getTutorLevel();
       setLevel(lvl);
-    } catch {}
+    } catch (e) {
+      console.warn('[UserContext] Failed to refresh level:', e.message);
+    }
   }, []);
 
   return (

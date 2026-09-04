@@ -9,6 +9,10 @@ import {
   updateUserRole,
   updateUserStatus,
   verifyUser,
+  listPendingUsers,
+  approveUser,
+  rejectUser,
+  bulkApproveUsers,
   listLessons,
   createLesson,
   updateLesson,
@@ -39,12 +43,16 @@ router.get('/analytics/overview', getOverview);
 
 // Users
 router.get('/users', listUsers);
+router.get('/users/pending', listPendingUsers);
 router.get('/users/:id', getUser);
 router.post('/users', createUser);
 router.delete('/users/:id', deleteUser);
 router.patch('/users/:id/role', updateUserRole);
 router.patch('/users/:id/status', updateUserStatus);
 router.post('/users/:id/verify', verifyUser);
+router.post('/users/:id/approve', approveUser);
+router.post('/users/:id/reject', rejectUser);
+router.post('/users/bulk-approve', bulkApproveUsers);
 
 // Lessons
 router.get('/lessons', listLessons);

@@ -1,4 +1,6 @@
-const XAI_API_KEY = process.env.XAI_API_KEY;
+import { env } from '../config/env';
+
+const XAI_API_KEY = env.XAI_API_KEY;
 const XAI_VOICE_MODEL = process.env.XAI_VOICE_MODEL || 'grok-voice-latest';
 const XAI_VOICE = process.env.XAI_VOICE || 'eve';
 

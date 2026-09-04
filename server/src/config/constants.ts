@@ -14,6 +14,8 @@ export const XP_VALUES = {
   DAILY_REWARD: 50,
   DAILY_GOAL_COMPLETE: 50,
   TUTOR_SESSION_COMPLETE: 10,
+  TUTOR_CHAT: 10,
+  TUTOR_LESSON: 20,
 } as const;
 
 export const LEVEL_THRESHOLDS = [

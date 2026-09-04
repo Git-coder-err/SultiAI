@@ -7,7 +7,17 @@ import * as schema from '../db/schema-sqlite';
 import { hashPassword, verifyPassword } from '../utils/crypto';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt';
 import { success, errors, created } from '../utils/apiResponse';
+import { getPlatformSettings } from '../utils/platformSettings';
 import logger from '../utils/logger';
+
+/** Check if user status allows login */
+function checkUserStatus(status: string | null): { allowed: boolean; message?: string } {
+  if (status === 'pending') return { allowed: false, message: 'Your account is pending admin approval. Please wait for an admin to approve your account.' };
+  if (status === 'rejected') return { allowed: false, message: 'Your account has been rejected. Please contact an administrator.' };
+  if (status === 'banned') return { allowed: false, message: 'Your account has been banned. Please contact an administrator.' };
+  if (status === 'suspended') return { allowed: false, message: 'Your account has been suspended. Please contact an administrator.' };
+  return { allowed: true };
+}
 
 export async function signUp(req: Request, res: Response): Promise<void> {
   try {
@@ -16,6 +26,17 @@ export async function signUp(req: Request, res: Response): Promise<void> {
     const { email, password } = body;
     if (!fullname || !email || !password) {
       errors.validation(res, 'Fullname, email, and password are required');
+      return;
+    }
+
+    // Check platform settings
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      errors.forbidden(res, 'System is under maintenance. Please try again later.');
+      return;
+    }
+    if (!settings.allowSignups) {
+      errors.forbidden(res, 'New registrations are currently disabled. Please contact an administrator.');
       return;
     }
 
@@ -35,18 +56,16 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       fullname,
       email,
       passwordHash,
+      status: 'pending',
       createdAt: new Date().toISOString(),
     });
 
     const userId = result.lastInsertRowid;
-    const tokens = generateTokenPair({ email, userId });
-
-    await storeRefreshToken(userId, tokens.refreshToken);
 
     created(res, {
-      user: { id: userId, fullname, email },
-      ...tokens,
-    }, 'Account created successfully');
+      user: { id: userId, fullname, email, status: 'pending' },
+      message: 'Account created successfully. Your account is pending admin approval.',
+    }, 'Account created — pending admin approval');
   } catch (err) {
     logger.error('Signup error', { error: (err as Error).message });
     errors.internal(res, 'Failed to create account');
@@ -58,6 +77,13 @@ export async function signIn(req: Request, res: Response): Promise<void> {
     const { email, password } = req.body || {};
     if (!email || !password) {
       errors.validation(res, 'Email and password are required');
+      return;
+    }
+
+    // Check platform settings
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      errors.forbidden(res, 'System is under maintenance. Please try again later.');
       return;
     }
 
@@ -78,6 +104,13 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Check user status
+    const statusCheck = checkUserStatus(user.status);
+    if (!statusCheck.allowed) {
+      errors.forbidden(res, statusCheck.message!);
+      return;
+    }
+
     const tokens = generateTokenPair({ email: user.email, userId: user.userId });
     await storeRefreshToken(user.userId, tokens.refreshToken);
 
@@ -88,6 +121,7 @@ export async function signIn(req: Request, res: Response): Promise<void> {
         email: user.email,
         avatarId: user.avatarId,
         role: user.role,
+        status: user.status,
       },
       ...tokens,
     }, 'Signed in successfully');
@@ -137,6 +171,13 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Check platform settings
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      errors.forbidden(res, 'System is under maintenance.');
+      return;
+    }
+
     const db = getDb();
 
     // 1. Try to find existing user by clerk_id first
@@ -161,6 +202,7 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
     }
 
     let userId: number;
+    let isNewUser = false;
 
     if (rows.length > 0) {
       // Existing user — update their info if needed
@@ -172,18 +214,32 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
           .set(updates)
           .where(eq(schema.users.userId, userId));
       }
+
+      // Check status of existing user
+      const statusCheck = checkUserStatus(rows[0].status);
+      if (!statusCheck.allowed) {
+        errors.forbidden(res, statusCheck.message!);
+        return;
+      }
     } else {
-      // New user — create a lightweight account (no password needed for Clerk users)
+      // New user — create account with pending status
+      if (!settings.allowSignups) {
+        errors.forbidden(res, 'New registrations are currently disabled.');
+        return;
+      }
+
       const fullname = name || 'User';
-      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder, not used for Clerk login
+      const passwordHash = hashPassword(crypto.randomUUID());
       const result = await (db as any).insert(schema.users).values({
         fullname,
         email: email || `${clerkId}@clerk.sultiai`,
         passwordHash,
         clerkId,
+        status: 'pending',
         createdAt: new Date().toISOString(),
       });
       userId = result.lastInsertRowid;
+      isNewUser = true;
     }
 
     // Issue backend JWT so subsequent API calls work
@@ -198,9 +254,11 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
         email: email || user?.email,
         avatarId: user?.avatarId,
         role: user?.role,
+        status: user?.status || 'pending',
       },
       ...tokens,
-    }, 'Clerk user synced');
+      isNewUser,
+    }, isNewUser ? 'Clerk user synced — pending admin approval' : 'Clerk user synced');
   } catch (err) {
     logger.error('Clerk sync error', { error: (err as Error).message });
     errors.internal(res, 'Failed to sync Clerk user');
@@ -212,6 +270,13 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
     const { idToken, email, name, avatar } = req.body || {};
     if (!idToken) {
       errors.validation(res, 'idToken is required');
+      return;
+    }
+
+    // Check platform settings
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      errors.forbidden(res, 'System is under maintenance.');
       return;
     }
 
@@ -265,6 +330,14 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
 
     if (rows.length > 0) {
       userId = rows[0].userId;
+
+      // Check status of existing user
+      const statusCheck = checkUserStatus(rows[0].status);
+      if (!statusCheck.allowed) {
+        errors.forbidden(res, statusCheck.message!);
+        return;
+      }
+
       // Update profile info if changed
       const updates: any = {};
       if (userName && userName !== rows[0].fullname) updates.fullname = userName;
@@ -275,14 +348,20 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
           .where(eq(schema.users.userId, userId));
       }
     } else {
-      // New user — create account
-      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder
+      // New user — create account with pending status
+      if (!settings.allowSignups) {
+        errors.forbidden(res, 'New registrations are currently disabled.');
+        return;
+      }
+
+      const passwordHash = hashPassword(crypto.randomUUID());
       const result = await (db as any).insert(schema.users).values({
         fullname: userName,
         email: userEmail || `${googleId}@google.sultiai`,
         passwordHash,
         googleId,
         avatarImage: userAvatar || null,
+        status: 'pending',
         createdAt: new Date().toISOString(),
       });
       userId = result.lastInsertRowid;
@@ -301,10 +380,11 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
         avatarId: updatedUser?.avatarId,
         avatarImage: userAvatar || updatedUser?.avatarImage,
         role: updatedUser?.role || 'user',
+        status: updatedUser?.status || 'pending',
       },
       ...tokens,
       isNewUser,
-    }, 'Google sign-in successful');
+    }, isNewUser ? 'Google sign-in successful — pending admin approval' : 'Google sign-in successful');
   } catch (err) {
     logger.error('Google sign-in error', { error: (err as Error).message });
     errors.internal(res, 'Failed to sign in with Google');
@@ -338,6 +418,13 @@ export async function syncSupabase(req: Request, res: Response): Promise<void> {
     const { supabaseId, email, name, native_language, target_language } = req.body || {};
     if (!supabaseId || !email) {
       errors.validation(res, 'supabaseId and email are required');
+      return;
+    }
+
+    // Check platform settings
+    const settings = await getPlatformSettings();
+    if (settings.maintenanceMode) {
+      errors.forbidden(res, 'System is under maintenance.');
       return;
     }
 
@@ -377,10 +464,22 @@ export async function syncSupabase(req: Request, res: Response): Promise<void> {
           .set(updates)
           .where(eq(schema.users.userId, userId));
       }
+
+      // Check status of existing user
+      const statusCheck = checkUserStatus(rows[0].status);
+      if (!statusCheck.allowed) {
+        errors.forbidden(res, statusCheck.message!);
+        return;
+      }
     } else {
-      // New user — create account in SQLite
+      // New user — create account in SQLite with pending status
+      if (!settings.allowSignups) {
+        errors.forbidden(res, 'New registrations are currently disabled.');
+        return;
+      }
+
       const fullname = name || 'User';
-      const passwordHash = hashPassword(crypto.randomUUID()); // placeholder, not used for Supabase login
+      const passwordHash = hashPassword(crypto.randomUUID());
       const result = await (db as any).insert(schema.users).values({
         fullname,
         email,
@@ -388,6 +487,7 @@ export async function syncSupabase(req: Request, res: Response): Promise<void> {
         supabaseId,
         preferredLang: native_language || 'English',
         learningLang: target_language || 'Bisaya',
+        status: 'pending',
         createdAt: new Date().toISOString(),
       });
       userId = result.lastInsertRowid;
@@ -414,9 +514,10 @@ export async function syncSupabase(req: Request, res: Response): Promise<void> {
         fullname: name || existingUser?.fullname || 'User',
         email: email || existingUser?.email,
         role: existingUser?.role || 'user',
+        status: existingUser?.status || 'pending',
       },
       isNewUser,
-    }, isNewUser ? 'Supabase user synced to local DB' : 'Supabase user already exists in local DB');
+    }, isNewUser ? 'Supabase user synced — pending admin approval' : 'Supabase user already exists in local DB');
   } catch (err) {
     logger.error('Supabase sync error', { error: (err as Error).message });
     errors.internal(res, 'Failed to sync Supabase user');

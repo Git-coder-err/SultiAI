@@ -28,14 +28,18 @@ export function useAdaptiveTutor() {
       ]);
       if (diffRaw) setState(JSON.parse(diffRaw));
       if (topicRaw) setTopicMastery(JSON.parse(topicRaw));
-    } catch {}
+    } catch (e) {
+      console.warn('[AdaptiveTutor] Failed to load state:', e.message);
+    }
   }, []);
 
   const persistState = useCallback(async (newState, newTopics) => {
     try {
       await AsyncStorage.setItem(DIFFICULTY_KEY, JSON.stringify(newState));
       await AsyncStorage.setItem(TOPIC_MASTERY_KEY, JSON.stringify(newTopics));
-    } catch {}
+    } catch (e) {
+      console.warn('[AdaptiveTutor] Failed to persist state:', e.message);
+    }
   }, []);
 
   const recordInteraction = useCallback(async (topic, success, score) => {

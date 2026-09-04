@@ -141,7 +141,9 @@ export default function CommunityScreen({ navigation }) {
   const speakPhrase = (text) => {
     try {
       Speech.speak(text, { language: 'ceb', rate: 0.8, pitch: 1.0 });
-    } catch {}
+    } catch (e) {
+      console.warn('[Community] Failed to speak phrase:', e.message);
+    }
   };
 
   const toggleSavePhrase = async (phrase) => {
@@ -155,7 +157,9 @@ export default function CommunityScreen({ navigation }) {
         const res = await api.savePhrase(phrase.native, 'Bisaya', phrase.category);
         setSavedPhrases((prev) => [...prev, { id: res?.id, phrase: phrase.native, category: phrase.category }]);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Community] Failed to toggle save phrase:', e.message);
+    }
   };
 
   const practicePhrase = (phrase) => {
@@ -257,7 +261,9 @@ export default function CommunityScreen({ navigation }) {
     try {
       const data = await communityMock.getComments(postId);
       setComments((prev) => ({ ...prev, [postId]: data }));
-    } catch {}
+    } catch (e) {
+      console.warn('[Community] Failed to load comments:', e.message);
+    }
   };
 
   const handleAddComment = async (postId, comment) => {
@@ -266,7 +272,9 @@ export default function CommunityScreen({ navigation }) {
       await communityMock.addComment(postId, comment);
       const data = await communityMock.getComments(postId);
       setComments((prev) => ({ ...prev, [postId]: data }));
-    } catch {}
+    } catch (e) {
+      console.warn('[Community] Failed to add comment:', e.message);
+    }
   };
 
   const handleToggleLike = async (postId) => {

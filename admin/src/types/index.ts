@@ -2,7 +2,7 @@ export type SystemStatus = "healthy" | "degraded" | "down";
 
 export type UserRole = "user" | "admin" | "moderator";
 
-export type UserStatus = "active" | "banned" | "suspended";
+export type UserStatus = "pending" | "approved" | "rejected" | "banned" | "suspended" | "active";
 
 export type ModuleDifficulty = "beginner" | "intermediate" | "advanced";
 

@@ -293,23 +293,31 @@ export default function LearnScreen({ navigation }) {
     try {
       const cached = await offline.getCachedVocabulary();
       if (Array.isArray(cached) && cached.length) setWordsLearned(cached.length);
-    } catch {}
+    } catch (e) {
+      console.warn('[Learn] Failed to load cached vocabulary:', e.message);
+    }
     try {
       const data = await api.getSavedPhrases();
       if (Array.isArray(data) && data.length) setWordsLearned(data.length);
-    } catch {}
+    } catch (e) {
+      console.warn('[Learn] Failed to load saved phrases:', e.message);
+    }
     try {
       const notifications = await api.getNotifications();
       if (Array.isArray(notifications)) {
         setNotifCount(notifications.filter((n) => n && !n.read).length);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Learn] Failed to load notifications:', e.message);
+    }
     try {
       const weekly = await api.getWeeklyProgress();
       if (Array.isArray(weekly) && weekly.length) {
         setWeeklyXpTotal(weekly.reduce((sum, day) => sum + (Number(day && day.xp) || 0), 0));
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Learn] Failed to load weekly progress:', e.message);
+    }
     try {
       const pron = await api.getPronunciationStats();
       if (pron) setPronunciationStats(pron);
@@ -319,7 +327,9 @@ export default function LearnScreen({ navigation }) {
     try {
       const progress = await api.getLearningProgress();
       if (Array.isArray(progress)) setLearningProgress(progress);
-    } catch {}
+    } catch (e) {
+      console.warn('[Learn] Failed to load learning progress:', e.message);
+    }
   }, []);
 
   useEffect(() => {

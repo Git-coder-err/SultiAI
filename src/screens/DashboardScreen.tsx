@@ -44,7 +44,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     setOnboardingComplete(true);
     try {
       await AsyncStorage.setItem('onboarding_completed', 'true');
-    } catch {}
+    } catch (e) {
+      console.warn('[Dashboard] Failed to save onboarding state:', e);
+    }
   };
 
   const headerOpacity = scrollY.interpolate({

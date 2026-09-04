@@ -1,11 +1,12 @@
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.6-27b';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1';
 
 import { fetchWithRetry } from './fetchRetry';
 import { isLocalLLMReady, localLLMChat, localLLMJSON } from '../services/localLLM';
 import { isLocalSTTReady, localTranscribe } from '../services/sttService';
+import { isVoiceboxEnabled, isVoiceboxAvailable, voiceboxTranscribe } from '../services/voiceboxService';
 
 interface GroqMessage {
   role: 'system' | 'user' | 'assistant';
@@ -26,7 +27,7 @@ export function isConfigured(): boolean {
 }
 
 export function isSTTConfigured(): boolean {
-  return isGroqConfigured() || isLocalSTTReady();
+  return isGroqConfigured() || isLocalSTTReady() || isVoiceboxEnabled();
 }
 
 async function groqChatRemote(
@@ -60,19 +61,30 @@ export async function groqChat(
   messages: GroqMessage[],
   options: GroqOptions = {}
 ): Promise<string> {
+  let reply: string;
   if (GROQ_API_KEY) {
-    return groqChatRemote(messages, options);
-  }
-  if (isLocalLLMReady()) {
-    return localLLMChat(messages, {
+    reply = await groqChatRemote(messages, options);
+  } else if (isLocalLLMReady()) {
+    reply = await localLLMChat(messages, {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
     });
+  } else {
+    throw new Error('No LLM configured: set GROQ_API_KEY or initialize local LLM');
   }
-  throw new Error('No LLM configured: set GROQ_API_KEY or initialize local LLM');
+  // Strip <think>...</think> reasoning blocks from chain-of-thought models
+  return reply.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
 export async function groqTranscribeAudio(audioBase64: string, filename = 'recording.m4a', mimeType = 'audio/mp4'): Promise<string> {
+  if (isVoiceboxEnabled() && (await isVoiceboxAvailable())) {
+    try {
+      return await voiceboxTranscribe(audioBase64, mimeType);
+    } catch (err) {
+      console.warn('[STT] Voicebox transcribe failed, trying next provider:', err);
+    }
+  }
+
   if (GROQ_API_KEY) {
     const audioBuffer = Buffer.from(audioBase64, 'base64');
     const boundary = `----FormBoundary${Date.now()}`;

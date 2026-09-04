@@ -26,7 +26,9 @@ export function PhraseOfTheDay() {
         const raw = await AsyncStorage.getItem(SAVED_KEY);
         const map: Record<string, boolean> = raw ? JSON.parse(raw) : {};
         if (mounted) setSaved(!!map[today.bisaya]);
-      } catch {}
+      } catch (e) {
+        console.warn('[PhraseOfTheDay] Failed to load saved state:', e);
+      }
     })();
     return () => {
       mounted = false;
@@ -46,7 +48,9 @@ export function PhraseOfTheDay() {
       try {
         const raw = await AsyncStorage.getItem(SAVED_KEY);
         map = raw ? JSON.parse(raw) : {};
-      } catch {}
+      } catch (e) {
+        console.warn('[PhraseOfTheDay] Failed to read saved map:', e);
+      }
       map[today.bisaya] = true;
       await AsyncStorage.setItem(SAVED_KEY, JSON.stringify(map));
       setSaved(true);

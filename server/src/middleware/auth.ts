@@ -3,9 +3,13 @@ import { verifyToken, JwtPayload } from '../utils/jwt';
 import { getDb } from '../db/connection';
 import { verifyCredentials } from '@supabase/server/core';
 import { errors } from '../utils/apiResponse';
+import { env } from '../config';
 
 // Cache for Supabase UUID → local user ID mapping
 const userIdCache = new Map<string, number>();
+
+// Supabase publishable key for JWKS verification (set from env)
+const SUPABASE_PUBLISHABLE_KEY = env.SUPABASE_PUBLISHABLE_KEY || '';
 
 declare global {
   namespace Express {
@@ -21,7 +25,7 @@ declare global {
  */
 function extractCredentials(req: Request) {
   const authHeader = req.headers['authorization'] || '';
-  const apikey = req.headers['apikey'] as string | undefined;
+  const apikey = (req.headers['apikey'] as string | undefined) || SUPABASE_PUBLISHABLE_KEY;
   return {
     token: authHeader.startsWith('Bearer ') ? authHeader.slice(7) || null : null,
     apikey: apikey || null,
@@ -35,7 +39,7 @@ function extractCredentials(req: Request) {
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const credentials = extractCredentials(req);
 
-  if (!credentials.token && !credentials.apikey) {
+  if (!credentials.token) {
     errors.unauthorized(res, 'Access token required');
     return;
   }
@@ -88,9 +92,32 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     }
   }
 
-  // Fall back to legacy JWT verification
-  const legacySession = verifyToken(credentials.token || '');
+  // Fall back to legacy JWT verification (also handles Supabase tokens via SUPABASE_JWT_SECRET)
+  const legacySession = verifyToken(credentials.token);
   if (legacySession) {
+    // Resolve email → local userId if needed
+    const email = legacySession.email || '';
+    const supabaseId = legacySession.sub || '';
+
+    if (legacySession.userId === 0 && email) {
+      if (supabaseId && userIdCache.has(supabaseId)) {
+        legacySession.userId = userIdCache.get(supabaseId)!;
+      } else {
+        try {
+          const db = getDb();
+          const schema = require('../db/schema-sqlite');
+          const { eq } = require('drizzle-orm');
+          const [existing] = (db as any).select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+          if (existing) {
+            legacySession.userId = existing.user_id;
+            if (supabaseId) userIdCache.set(supabaseId, existing.user_id);
+          }
+        } catch (dbErr) {
+          // DB lookup failed — userId stays 0
+        }
+      }
+    }
+
     req.user = { ...legacySession, id: legacySession.userId };
     return next();
   }

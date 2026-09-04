@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   learning_lang TEXT DEFAULT 'Bisaya',
   country TEXT,
   role TEXT NOT NULL DEFAULT 'user',
+  status TEXT NOT NULL DEFAULT 'approved',
   is_verified INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_supabase_id ON public.users(supabase_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
+CREATE INDEX IF NOT EXISTS idx_users_status ON public.users(status);
 
 -- ============================================
 -- 2. User Settings

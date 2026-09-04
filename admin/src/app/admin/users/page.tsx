@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AdminUser, UserDetail, UserFilters, UserRole } from "@/types";
 import { Avatar, Card, EmptyState, ErrorState, LoadingState, RoleBadge, StatusBadge, inputCls, selectCls } from "@/components/ui";
 import { useAsync } from "@/hooks/useAsync";
@@ -18,14 +18,23 @@ const defaultFilters: UserFilters = {
   sort: "recent",
 };
 
+type UsersTab = "all" | "pending";
+
 export default function AdminUsersPage() {
   const toast = useToast();
+  const [tab, setTab] = useState<UsersTab>("all");
   const [filters, setFilters] = useState<UserFilters>(defaultFilters);
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Pending users
+  const [pendingUsers, setPendingUsers] = useState<AdminUser[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+  const [selectedPending, setSelectedPending] = useState<Set<number>>(new Set());
 
   const { data, loading, error, reload } = useAsync(
     () => api.listUsers(filters, page, PER_PAGE),
@@ -36,6 +45,23 @@ export default function AdminUsersPage() {
     () => (selectedId ? api.getUser(selectedId) : Promise.resolve(null)),
     [selectedId],
   );
+
+  async function loadPendingUsers() {
+    setPendingLoading(true);
+    setPendingError(null);
+    try {
+      const res = await api.listPendingUsers();
+      setPendingUsers(res.items || []);
+    } catch (err: any) {
+      setPendingError(err?.message || "Failed to load pending users");
+    } finally {
+      setPendingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "pending") loadPendingUsers();
+  }, [tab]);
 
   function updateFilters(patch: Partial<UserFilters>) {
     setFilters((f) => ({ ...f, ...patch }));
@@ -49,10 +75,47 @@ export default function AdminUsersPage() {
   }
 
   async function handleBan(u: AdminUser, ban: boolean) {
-    await api.updateUserStatus(u.id, ban ? "banned" : "active");
+    await api.updateUserStatus(u.id, ban ? "banned" : "approved");
     toast.push(ban ? "error" : "success", ban ? `${u.name} has been banned.` : `${u.name} has been reactivated.`);
     setBanTarget(null);
     reload();
+  }
+
+  async function handleApprove(u: AdminUser) {
+    await api.approveUser(u.id);
+    toast.push("success", `${u.name} has been approved.`);
+    loadPendingUsers();
+  }
+
+  async function handleReject(u: AdminUser) {
+    await api.rejectUser(u.id);
+    toast.push("info", `${u.name} has been rejected.`);
+    loadPendingUsers();
+  }
+
+  async function handleBulkApprove() {
+    if (selectedPending.size === 0) return;
+    await api.bulkApproveUsers(Array.from(selectedPending));
+    toast.push("success", `${selectedPending.size} users approved.`);
+    setSelectedPending(new Set());
+    loadPendingUsers();
+  }
+
+  function togglePendingSelection(id: number) {
+    setSelectedPending((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllPending() {
+    if (selectedPending.size === pendingUsers.length) {
+      setSelectedPending(new Set());
+    } else {
+      setSelectedPending(new Set(pendingUsers.map((u) => u.id)));
+    }
   }
 
   async function handleVerify(id: number, verified: boolean) {
@@ -131,165 +194,299 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <Card className="p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <input
-            className={`${inputCls} lg:max-w-xs`}
-            placeholder="Search name or email..."
-            value={filters.search}
-            onChange={(e) => updateFilters({ search: e.target.value })}
-          />
-          <div className="flex flex-wrap gap-3">
-            <select
-              className={selectCls}
-              value={filters.role}
-              onChange={(e) => updateFilters({ role: e.target.value as UserFilters["role"] })}
-            >
-              <option value="all">All roles</option>
-              <option value="admin">Admins</option>
-              <option value="moderator">Moderators</option>
-              <option value="user">Users</option>
-            </select>
-            <select
-              className={selectCls}
-              value={filters.status}
-              onChange={(e) => updateFilters({ status: e.target.value as UserFilters["status"] })}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="banned">Banned</option>
-            </select>
-            <select
-              className={selectCls}
-              value={filters.sort}
-              onChange={(e) => updateFilters({ sort: e.target.value as UserFilters["sort"] })}
-            >
-              <option value="recent">Recently active</option>
-              <option value="xp">Highest XP</option>
-              <option value="level">Highest level</option>
-              <option value="joined">Newest</option>
-            </select>
-          </div>
-        </div>
-      </Card>
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
+        <button
+          type="button"
+          onClick={() => setTab("all")}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+            tab === "all" ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          All Users
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("pending")}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+            tab === "pending" ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          Pending Approvals
+          {pendingUsers.length > 0 && (
+            <span className="ml-2 rounded-full bg-warning px-2 py-0.5 text-xs text-white">{pendingUsers.length}</span>
+          )}
+        </button>
+      </div>
 
-      {loading ? (
-        <LoadingState />
-      ) : error ? (
-        <ErrorState message={error} onRetry={reload} />
-      ) : !data || data.items.length === 0 ? (
-        <Card>
-          <EmptyState title="No users found" description="Try adjusting your search or filters." />
-        </Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-line bg-surface text-xs uppercase tracking-wide text-ink-faint">
-                  <th className="px-5 py-3.5 font-semibold">User</th>
-                  <th className="px-5 py-3.5 font-semibold">Role</th>
-                  <th className="px-5 py-3.5 font-semibold">Status</th>
-                  <th className="px-5 py-3.5 font-semibold">Level</th>
-                  <th className="px-5 py-3.5 font-semibold">XP</th>
-                  <th className="px-5 py-3.5 font-semibold">Streak</th>
-                  <th className="px-5 py-3.5 font-semibold">Lessons</th>
-                  <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((u) => (
-                  <tr key={u.id} className="border-b border-line transition-colors last:border-0 hover:bg-surface/60">
-                    <td className="px-5 py-3.5">
-                      <button type="button" onClick={() => setSelectedId(u.id)} className="flex items-center gap-3 text-left">
-                        <Avatar name={u.name} />
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold text-ink">
-                            {u.name} {u.nativeSpeaker && <span title="Native speaker">🇵🇭</span>}
+      {/* Pending Approvals Tab */}
+      {tab === "pending" && (
+        <>
+          {pendingLoading ? (
+            <LoadingState />
+          ) : pendingError ? (
+            <ErrorState message={pendingError} onRetry={loadPendingUsers} />
+          ) : pendingUsers.length === 0 ? (
+            <Card>
+              <EmptyState title="No pending approvals" description="All user accounts have been reviewed." />
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="flex items-center justify-between border-b border-line px-5 py-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedPending.size === pendingUsers.length}
+                    onChange={toggleAllPending}
+                    className="h-4 w-4 rounded border-line"
+                  />
+                  <span className="text-ink-soft">
+                    {selectedPending.size > 0 ? `${selectedPending.size} selected` : `${pendingUsers.length} pending`}
+                  </span>
+                </label>
+                {selectedPending.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleBulkApprove}
+                    className="rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                  >
+                    Approve Selected ({selectedPending.size})
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surface text-xs uppercase tracking-wide text-ink-faint">
+                      <th className="w-10 px-5 py-3.5"></th>
+                      <th className="px-5 py-3.5 font-semibold">User</th>
+                      <th className="px-5 py-3.5 font-semibold">Auth Provider</th>
+                      <th className="px-5 py-3.5 font-semibold">Joined</th>
+                      <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingUsers.map((u) => (
+                      <tr key={u.id} className="border-b border-line transition-colors last:border-0 hover:bg-surface/60">
+                        <td className="px-5 py-3.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedPending.has(u.id)}
+                            onChange={() => togglePendingSelection(u.id)}
+                            className="h-4 w-4 rounded border-line"
+                          />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={u.name} />
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold text-ink">{u.name}</span>
+                              <span className="block truncate text-xs text-ink-faint">{u.email}</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-ink-soft capitalize">
+                            {(u as any).authProvider || "email"}
                           </span>
-                          <span className="block truncate text-xs text-ink-faint">{u.email}</span>
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <RoleBadge role={u.role} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={u.status} />
-                    </td>
-                    <td className="px-5 py-3.5 font-semibold text-ink">{u.level}</td>
-                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{(u.xp ?? 0).toLocaleString()}</td>
-                    <td className="px-5 py-3.5">
-                      {(u.streak ?? 0) > 0 && <span className="font-semibold text-accent">🔥 {u.streak}d</span>}
-                    </td>
-                    <td className="px-5 py-3.5 tabular-nums text-ink-soft">{u.lessons ?? 0}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
-                          className="rounded-lg border border-line px-2 py-1.5 text-xs text-ink"
-                          title="Change role"
-                        >
-                          <option value="user">User</option>
-                          <option value="moderator">Mod</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setBanTarget(u)}
-                          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                            u.status === "banned"
-                              ? "bg-success/10 text-success hover:bg-success hover:text-white"
-                              : "bg-danger/10 text-danger hover:bg-danger hover:text-white"
-                          }`}
-                        >
-                          {u.status === "banned" ? "Unban" : "Ban"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(u)}
-                          className="rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
-                          title="Delete user permanently"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-xs text-ink-soft">
+                          {new Date(u.joinedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(u)}
+                              className="rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success hover:text-white"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(u)}
+                              className="rounded-lg bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
 
-          <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
-            <p className="text-xs text-ink-faint">
-              Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, data.total)} of {data.total}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <span className="text-xs text-ink-faint">
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
-              >
-                Next
-              </button>
+      {/* All Users Tab */}
+      {tab === "all" && (
+        <>
+          <Card className="p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <input
+                className={`${inputCls} lg:max-w-xs`}
+                placeholder="Search name or email..."
+                value={filters.search}
+                onChange={(e) => updateFilters({ search: e.target.value })}
+              />
+              <div className="flex flex-wrap gap-3">
+                <select
+                  className={selectCls}
+                  value={filters.role}
+                  onChange={(e) => updateFilters({ role: e.target.value as UserFilters["role"] })}
+                >
+                  <option value="all">All roles</option>
+                  <option value="admin">Admins</option>
+                  <option value="moderator">Moderators</option>
+                  <option value="user">Users</option>
+                </select>
+                <select
+                  className={selectCls}
+                  value={filters.status}
+                  onChange={(e) => updateFilters({ status: e.target.value as UserFilters["status"] })}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="banned">Banned</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+                <select
+                  className={selectCls}
+                  value={filters.sort}
+                  onChange={(e) => updateFilters({ sort: e.target.value as UserFilters["sort"] })}
+                >
+                  <option value="recent">Recently active</option>
+                  <option value="xp">Highest XP</option>
+                  <option value="level">Highest level</option>
+                  <option value="joined">Newest</option>
+                </select>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          {loading ? (
+            <LoadingState />
+          ) : error ? (
+            <ErrorState message={error} onRetry={reload} />
+          ) : !data || data.items.length === 0 ? (
+            <Card>
+              <EmptyState title="No users found" description="Try adjusting your search or filters." />
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surface text-xs uppercase tracking-wide text-ink-faint">
+                      <th className="px-5 py-3.5 font-semibold">User</th>
+                      <th className="px-5 py-3.5 font-semibold">Role</th>
+                      <th className="px-5 py-3.5 font-semibold">Status</th>
+                      <th className="px-5 py-3.5 font-semibold">Level</th>
+                      <th className="px-5 py-3.5 font-semibold">XP</th>
+                      <th className="px-5 py-3.5 font-semibold">Streak</th>
+                      <th className="px-5 py-3.5 font-semibold">Lessons</th>
+                      <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.items.map((u) => (
+                      <tr key={u.id} className="border-b border-line transition-colors last:border-0 hover:bg-surface/60">
+                        <td className="px-5 py-3.5">
+                          <button type="button" onClick={() => setSelectedId(u.id)} className="flex items-center gap-3 text-left">
+                            <Avatar name={u.name} />
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold text-ink">
+                                {u.name} {u.nativeSpeaker && <span title="Native speaker">🇵🇭</span>}
+                              </span>
+                              <span className="block truncate text-xs text-ink-faint">{u.email}</span>
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <RoleBadge role={u.role} />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <StatusBadge status={u.status} />
+                        </td>
+                        <td className="px-5 py-3.5 font-semibold text-ink">{u.level}</td>
+                        <td className="px-5 py-3.5 tabular-nums text-ink-soft">{(u.xp ?? 0).toLocaleString()}</td>
+                        <td className="px-5 py-3.5">
+                          {(u.streak ?? 0) > 0 && <span className="font-semibold text-accent">🔥 {u.streak}d</span>}
+                        </td>
+                        <td className="px-5 py-3.5 tabular-nums text-ink-soft">{u.lessons ?? 0}</td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <select
+                              value={u.role}
+                              onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                              className="rounded-lg border border-line px-2 py-1.5 text-xs text-ink"
+                              title="Change role"
+                            >
+                              <option value="user">User</option>
+                              <option value="moderator">Mod</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setBanTarget(u)}
+                              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+                                u.status === "banned"
+                                  ? "bg-success/10 text-success hover:bg-success hover:text-white"
+                                  : "bg-danger/10 text-danger hover:bg-danger hover:text-white"
+                              }`}
+                            >
+                              {u.status === "banned" ? "Unban" : "Ban"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(u)}
+                              className="rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white"
+                              title="Delete user permanently"
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
+                <p className="text-xs text-ink-faint">
+                  Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, data.total)} of {data.total}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-xs text-ink-faint">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {selectedId && (

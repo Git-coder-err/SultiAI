@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
-import { eq, desc, sql, and, like, count, or } from 'drizzle-orm';
+import { eq, desc, sql, and, like, count, or, inArray } from 'drizzle-orm';
 import { getDb } from '../db/connection';
 import * as schema from '../db/schema-sqlite';
 import { success, errors } from '../utils/apiResponse';
+import { invalidateSettingsCache } from '../utils/platformSettings';
 import logger from '../utils/logger';
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -31,27 +32,13 @@ function levelToNumber(level: string | null | undefined, totalXp: number): numbe
   return 1;
 }
 
-/** Get user status from audit_logs (most recent ban/suspend action) */
+/** Get user status — now uses the status column on users table */
 async function getUserStatus(db: any, userId: number): Promise<string> {
-  const [lastBan] = await db.select({ action: schema.auditLogs.action })
-    .from(schema.auditLogs)
-    .where(
-      and(
-        eq(schema.auditLogs.userId, userId),
-        or(
-          eq(schema.auditLogs.action, 'ban_user'),
-          eq(schema.auditLogs.action, 'suspend_user'),
-          eq(schema.auditLogs.action, 'unban_user'),
-        )
-      )
-    )
-    .orderBy(desc(schema.auditLogs.timestamp))
+  const [row] = await db.select({ status: schema.users.status })
+    .from(schema.users)
+    .where(eq(schema.users.userId, userId))
     .limit(1);
-
-  if (!lastBan) return 'active';
-  if (lastBan.action === 'ban_user') return 'banned';
-  if (lastBan.action === 'suspend_user') return 'suspended';
-  return 'active';
+  return row?.status || 'approved';
 }
 
 // ── Overview / Dashboard ──────────────────────────────────────────
@@ -190,6 +177,9 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
     if (roleFilter !== 'all') {
       conditions.push(eq(schema.users.role, roleFilter));
     }
+    if (statusFilter !== 'all') {
+      conditions.push(eq(schema.users.status, statusFilter));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -238,15 +228,7 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
       country: r.country,
     })));
 
-    // Filter by status if requested (status is in audit_logs, filter after fetch)
-    const filteredItems = statusFilter !== 'all'
-      ? items.filter((u) => u.status === statusFilter)
-      : items;
-
-    // Recount total if status filtering was applied
-    const finalTotal = statusFilter !== 'all' ? filteredItems.length : total;
-
-    success(res, { items: filteredItems, total: finalTotal, page, perPage }, 'Users loaded');
+    success(res, { items, total, page, perPage }, 'Users loaded');
   } catch (err) {
     logger.error('Admin list users error', { error: (err as Error).message });
     errors.internal(res, 'Failed to list users');
@@ -343,16 +325,18 @@ export async function updateUserStatus(req: Request, res: Response): Promise<voi
     const userId = Number(req.params.id);
     const { status } = req.body;
 
-    if (!['active', 'banned', 'suspended'].includes(status)) {
+    if (!['approved', 'pending', 'rejected', 'banned', 'suspended'].includes(status)) {
       errors.validation(res, 'Invalid status');
       return;
     }
 
-    // Status is stored in user_settings or we can add it to users table
-    // For now, use audit_logs to track ban/unban actions
+    await (db as any).update(schema.users)
+      .set({ status })
+      .where(eq(schema.users.userId, userId));
+
     await (db as any).insert(schema.auditLogs).values({
-      userId,
-      action: status === 'banned' ? 'ban_user' : status === 'suspended' ? 'suspend_user' : 'unban_user',
+      userId: req.user?.userId,
+      action: `set_user_status_${status}`,
       resourceType: 'user',
       resourceId: String(userId),
       details: JSON.stringify({ status, changedBy: req.user?.userId }),
@@ -506,6 +490,140 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
   } catch (err) {
     logger.error('Admin delete user error', { error: (err as Error).message });
     errors.internal(res, 'Failed to delete user');
+  }
+}
+
+// ── Lessons ───────────────────────────────────────────────────────
+
+export async function listPendingUsers(_req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const rows = await (db as any).select({
+      userId: schema.users.userId,
+      fullname: schema.users.fullname,
+      email: schema.users.email,
+      role: schema.users.role,
+      status: schema.users.status,
+      createdAt: schema.users.createdAt,
+      supabaseId: schema.users.supabaseId,
+      googleId: schema.users.googleId,
+    })
+      .from(schema.users)
+      .where(eq(schema.users.status, 'pending'))
+      .orderBy(desc(schema.users.createdAt));
+
+    const items = rows.map((r: any) => ({
+      id: r.userId,
+      name: r.fullname || 'Unknown',
+      email: r.email,
+      role: r.role || 'user',
+      status: r.status || 'pending',
+      joinedAt: r.createdAt || new Date().toISOString(),
+      authProvider: r.supabaseId ? 'supabase' : r.googleId ? 'google' : 'email',
+    }));
+
+    success(res, { items, total: items.length }, 'Pending users loaded');
+  } catch (err) {
+    logger.error('Admin list pending users error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to list pending users');
+  }
+}
+
+export async function approveUser(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const userId = Number(req.params.id);
+
+    const rows = await (db as any).select({ userId: schema.users.userId, status: schema.users.status })
+      .from(schema.users)
+      .where(eq(schema.users.userId, userId))
+      .limit(1);
+
+    if (!rows.length) {
+      errors.notFound(res, 'User not found');
+      return;
+    }
+
+    await (db as any).update(schema.users)
+      .set({ status: 'approved' })
+      .where(eq(schema.users.userId, userId));
+
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'approve_user',
+      resourceType: 'user',
+      resourceId: String(userId),
+      details: JSON.stringify({ approvedBy: req.user?.userId }),
+    });
+
+    success(res, { id: userId, status: 'approved' }, 'User approved');
+  } catch (err) {
+    logger.error('Admin approve user error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to approve user');
+  }
+}
+
+export async function rejectUser(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const userId = Number(req.params.id);
+    const { reason } = req.body || {};
+
+    const rows = await (db as any).select({ userId: schema.users.userId })
+      .from(schema.users)
+      .where(eq(schema.users.userId, userId))
+      .limit(1);
+
+    if (!rows.length) {
+      errors.notFound(res, 'User not found');
+      return;
+    }
+
+    await (db as any).update(schema.users)
+      .set({ status: 'rejected' })
+      .where(eq(schema.users.userId, userId));
+
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'reject_user',
+      resourceType: 'user',
+      resourceId: String(userId),
+      details: JSON.stringify({ rejectedBy: req.user?.userId, reason: reason || null }),
+    });
+
+    success(res, { id: userId, status: 'rejected' }, 'User rejected');
+  } catch (err) {
+    logger.error('Admin reject user error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to reject user');
+  }
+}
+
+export async function bulkApproveUsers(req: Request, res: Response): Promise<void> {
+  try {
+    const db = getDb();
+    const { userIds } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      errors.validation(res, 'userIds array is required');
+      return;
+    }
+
+    await (db as any).update(schema.users)
+      .set({ status: 'approved' })
+      .where(inArray(schema.users.userId, userIds));
+
+    await (db as any).insert(schema.auditLogs).values({
+      userId: req.user?.userId,
+      action: 'bulk_approve_users',
+      resourceType: 'user',
+      resourceId: userIds.join(','),
+      details: JSON.stringify({ count: userIds.length, approvedBy: req.user?.userId }),
+    });
+
+    success(res, { approved: userIds.length }, `${userIds.length} users approved`);
+  } catch (err) {
+    logger.error('Admin bulk approve error', { error: (err as Error).message });
+    errors.internal(res, 'Failed to bulk approve users');
   }
 }
 
@@ -788,7 +906,7 @@ export async function getAiUsage(_req: Request, res: Response): Promise<void> {
       totalTokens: num(tokenRow?.total) * 100 || total * 500,
       providers: [
         { name: 'Groq (LLM)', requests: tutorRequests, failed: 0 },
-        { name: 'ElevenLabs', requests: voiceRequests, failed: 0 },
+        { name: 'Voicebox', requests: voiceRequests, failed: 0 },
         { name: 'Local STT', requests: whisperRequests, failed: 0 },
       ],
       trend,
@@ -1026,6 +1144,9 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       resourceId: 'platform',
       details: JSON.stringify(settingsData),
     });
+
+    // Invalidate settings cache so next request picks up new values
+    invalidateSettingsCache();
 
     success(res, { ...settingsData, updatedAt: new Date().toISOString() }, 'Settings updated');
   } catch (err) {

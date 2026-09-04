@@ -26,7 +26,9 @@ export function ThemeProvider({ children }) {
         if (stored && VALID_MODES.includes(stored)) {
           setThemeModeState(stored);
         }
-      } catch {} finally {
+      } catch (e) {
+        console.warn('[ThemeContext] Failed to load theme preference:', e.message);
+      } finally {
         setLoading(false);
       }
     })();
@@ -39,7 +41,9 @@ export function ThemeProvider({ children }) {
     setThemeModeState(mode);
     try {
       await AsyncStorage.setItem(THEME_MODE_KEY, mode);
-    } catch {}
+    } catch (e) {
+      console.warn('[ThemeContext] Failed to save theme preference:', e.message);
+    }
   };
 
   const toggleTheme = () => setThemeMode(isDark ? 'light' : 'dark');

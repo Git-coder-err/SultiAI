@@ -45,7 +45,7 @@ import { success, errors } from './utils/apiResponse';
 
 const app = express();
 
-app.use(cors({ origin: configureCors, allowedHeaders: ['Content-Type', 'Authorization'], methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
+app.use(cors({ origin: configureCors, allowedHeaders: ['Content-Type', 'Authorization', 'apikey'], methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
 app.use(express.json({ limit: env.MAX_REQUEST_SIZE }));
 app.use(setSecurityHeaders);
 app.use(requestLogger);

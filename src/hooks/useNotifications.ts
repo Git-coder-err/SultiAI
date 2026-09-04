@@ -91,7 +91,9 @@ export function useNotifications() {
           repeats: true,
         },
       });
-    } catch {}
+    } catch (e) {
+      console.warn('[Notifications] Failed to schedule streak reminder:', e.message);
+    }
   };
 
   const scheduleDailyReminder = async (hour: number = 9, minute: number = 0): Promise<void> => {
@@ -99,13 +101,15 @@ export function useNotifications() {
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Time to learn Bisaya! 📚',
+          title: 'Time to learn Bisaya!',
           body: 'A few minutes of practice today goes a long way.',
           data: { type: 'daily_reminder' },
         },
         trigger: { hour, minute, repeats: true },
       });
-    } catch {}
+    } catch (e) {
+      console.warn('[Notifications] Failed to schedule daily reminder:', e.message);
+    }
   };
 
   const sendGoalAchievedNotification = async (): Promise<void> => {
@@ -113,20 +117,24 @@ export function useNotifications() {
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Daily goal achieved! 🎯',
+          title: 'Daily goal achieved!',
           body: `Amazing! You've reached your ${dailyGoal} XP goal today.`,
           data: { type: 'goal_achieved' },
         },
         trigger: { seconds: 1 },
       });
-    } catch {}
+    } catch (e) {
+      console.warn('[Notifications] Failed to send goal notification:', e.message);
+    }
   };
 
   const cancelAllNotifications = async (): Promise<void> => {
     if (!Notifications) return;
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
-    } catch {}
+    } catch (e) {
+      console.warn('[Notifications] Failed to cancel notifications:', e.message);
+    }
   };
 
   const requestPermissions = useCallback(async (): Promise<boolean> => {

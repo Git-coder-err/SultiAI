@@ -57,7 +57,9 @@ export function useOfflineSync() {
       await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(items));
       setQueue(items);
       queueRef.current = items;
-    } catch {}
+    } catch (e) {
+      console.warn('[OfflineSync] Failed to save queue:', e);
+    }
   };
 
   const enqueueAction = async (

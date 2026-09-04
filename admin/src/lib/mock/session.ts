@@ -55,8 +55,15 @@ function getServerSnapshot() {
 function commit(session: AdminSession | null) {
   currentSession = session;
   if (typeof window !== "undefined") {
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else localStorage.removeItem(SESSION_KEY);
+    if (session) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      // Also set a cookie for Next.js middleware to read
+      document.cookie = `${SESSION_KEY}=${JSON.stringify({ token: session.token, role: session.role })}; path=/admin; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    } else {
+      localStorage.removeItem(SESSION_KEY);
+      // Clear the cookie
+      document.cookie = `${SESSION_KEY}=; path=/admin; max-age=0`;
+    }
   }
   listeners.forEach((l) => l());
 }

@@ -51,7 +51,8 @@
           "microphonePermission": "SultiAI needs microphone access for voice conversations with your AI tutor."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

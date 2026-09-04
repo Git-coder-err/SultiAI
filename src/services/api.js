@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 async function getToken() {
   try {
@@ -17,6 +18,8 @@ async function request(method, path, body = null) {
   const token = await getToken();
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Send Supabase publishable key for server-side JWKS verification
+  if (SUPABASE_PUBLISHABLE_KEY) headers['apikey'] = SUPABASE_PUBLISHABLE_KEY;
 
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
@@ -215,9 +218,7 @@ export const api = {
   agentStatus: () => request('GET', '/api/agent/status'),
   agentToken: () => request('POST', '/api/agent/token'),
 
-  // Voice Agent (ElevenLabs speech-to-speech)
-  elevenlabsSession: () => request('GET', '/api/agent/elevenlabs'),
-
+  // Voice Agent (xAI realtime speech-to-speech)
   // Generic methods for offline sync
   postData: (path, body) => request('POST', path, body),
   putData: (path, body) => request('PUT', path, body),

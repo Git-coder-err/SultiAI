@@ -20,6 +20,7 @@ export const users = mysqlTable('users', {
   learningLang: varchar('learning_lang', { length: 50 }).default('Bisaya'),
   country: varchar('country', { length: 100 }),
   role: varchar('role', { length: 20 }).notNull().default('user'),
+  status: varchar('status', { length: 20 }).notNull().default('approved'),
   isVerified: int('is_verified').default(0),
   isNativeSpeaker: int('is_native_speaker').default(0),
   bio: text('bio'),

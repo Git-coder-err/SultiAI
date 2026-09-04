@@ -26,7 +26,8 @@ function getToken(): string {
     if (!raw) return "";
     const session = JSON.parse(raw);
     return session.token || "";
-  } catch {
+  } catch (e) {
+    console.warn('[AdminAPI] Failed to parse session token:', e);
     return "";
   }
 }
@@ -74,6 +75,18 @@ export const api = {
 
   deleteUser: (id: number): Promise<void> =>
     http("DELETE", `/api/admin/users/${id}`),
+
+  listPendingUsers: (): Promise<{ items: AdminUser[]; total: number }> =>
+    http("GET", "/api/admin/users/pending"),
+
+  approveUser: (id: number): Promise<{ id: number; status: string }> =>
+    http("POST", `/api/admin/users/${id}/approve`),
+
+  rejectUser: (id: number, reason?: string): Promise<{ id: number; status: string }> =>
+    http("POST", `/api/admin/users/${id}/reject`, { reason }),
+
+  bulkApproveUsers: (userIds: number[]): Promise<{ approved: number }> =>
+    http("POST", "/api/admin/users/bulk-approve", { userIds }),
 
   listLessons: (): Promise<LessonModule[]> =>
     http("GET", "/api/admin/lessons"),

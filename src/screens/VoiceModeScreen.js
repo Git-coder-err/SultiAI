@@ -27,12 +27,10 @@ import { UserMessage, SultiMessage, TypingIndicator } from '../components/voice/
 import { voice } from '../components/voice/palette';
 import { useGame } from '../context/GameContext';
 import { api } from '../services/api';
-import { useConversation } from '@elevenlabs/react-native';
 import { speakTTS, stopTTS, setTTSMuted, getAudioPlayer } from '../utils/tts';
 import { playRealtimePcm } from '../utils/realtimeAudio';
 import {
   VoiceRealtimeSession, fetchVoiceAgentConfig, encodePcm16ToBase64, encodeWavBase64, resampleInt16, REALTIME_INPUT_RATE,
-  fetchElevenlabsConfig, ELEVENLABS_INPUT_RATE, ELEVENLABS_AGENT_ID, buildElevenlabsOverrides,
 } from '../services/voiceAgent';
 import {
   hapticMicStart, hapticMicEnd, hapticAIBeginsSpeaking, hapticAIFinished,
@@ -82,11 +80,7 @@ export default function VoiceModeScreen({ navigation }) {
   const isSpeakingRef = useRef(false);
   const isConnectingRef = useRef(false);
   const voiceSessionRef = useRef(null);
-  const elevenSessionRef = useRef(null);
-  const agentModeRef = useRef(null); // 'elevenlabs' | 'xai' | 'local'
-  const elevenFinalizeTimer = useRef(null);
-  const elevenIdleTimer = useRef(null);
-  const handleElevenEventRef = useRef(null);
+  const agentModeRef = useRef(null); // 'xai' | 'local'
   const transcriptRef = useRef('');
   const audioRef = useRef('');
   const handleRealtimeEventRef = useRef(null);
@@ -107,112 +101,9 @@ export default function VoiceModeScreen({ navigation }) {
   const localModeRef = useRef(false);
   const audioChunksRef = useRef(null);
 
-  // ElevenLabs Conversational AI SDK (React Native)
-  const [sdkConnected, setSdkConnected] = useState(false);
-  const elevenConversation = useConversation({
-    onConnect: () => {
-      setSdkConnected(true);
-      setOrbState('listening');
-      hapticMicStart();
-    },
-    onDisconnect: () => {
-      setSdkConnected(false);
-      if (agentModeRef.current === 'elevenlabs-sdk') {
-        agentModeRef.current = null;
-      }
-    },
-    onMessage: (message) => {
-      if (!message) return;
-      if (message.source === 'user' && message.message && message.message.trim()) {
-        addMessage('user', message.message, null);
-      }
-      if (message.source === 'agent' && message.message) {
-        transcriptRef.current = message.message;
-        setHasSpoken(true);
-      }
-    },
-    onError: (error) => {
-      console.warn('ElevenLabs SDK error:', error);
-      if (!isRecordingRef.current) {
-        setOrbState('idle');
-        hapticError();
-      }
-    },
-    onModeChange: (mode) => {
-      if (mode === 'speaking') {
-        setOrbState('speaking');
-        hapticAIBeginsSpeaking();
-      } else if (mode === 'listening') {
-        setOrbState('listening');
-      } else if (mode === 'idle') {
-        // Agent finished — finalize the turn
-        const transcript = transcriptRef.current;
-        transcriptRef.current = '';
-        if (transcript) {
-          addMessage('assistant', transcript, null);
-          setHasSpoken(true);
-        } else {
-          addMessage('assistant', 'SULTI!', null);
-        }
-        addXp(XP_VALUES.VOICE_PRACTICE_TURN, 'voice_practice');
-        setXpToastVisible(true);
-        hapticXpGain();
-        if (xpTimer.current) clearTimeout(xpTimer.current);
-        xpTimer.current = setTimeout(() => setXpToastVisible(false), 2400);
-
-        setOrbState('idle');
-        hapticAIFinished();
-        if (continuousRef.current && !isRecordingRef.current) {
-          restartTimer.current = setTimeout(() => startRecordingRef.current && startRecordingRef.current(), 650);
-        }
-      }
-    },
-  });
-
-  const clearElevenTimers = useCallback(() => {
-    if (elevenFinalizeTimer.current) {
-      clearTimeout(elevenFinalizeTimer.current);
-      elevenFinalizeTimer.current = null;
-    }
-    if (elevenIdleTimer.current) {
-      clearTimeout(elevenIdleTimer.current);
-      elevenIdleTimer.current = null;
-    }
-  }, []);
-
-  const closeElevenSession = useCallback(() => {
-    clearElevenTimers();
-    // Close old raw WebSocket session if any
-    const s = elevenSessionRef.current;
-    if (s) {
-      try { s.close(); } catch {}
-      elevenSessionRef.current = null;
-    }
-    // Close ElevenLabs SDK session if active
-    if (agentModeRef.current === 'elevenlabs-sdk') {
-      try { elevenConversation.endSession(); } catch {}
-    }
-    if (agentModeRef.current === 'elevenlabs' || agentModeRef.current === 'elevenlabs-sdk') agentModeRef.current = null;
-  }, [clearElevenTimers, elevenConversation]);
-
   const handleStreamBuffer = useCallback((buffer) => {
     try {
       if (buffer && buffer.data) {
-        // ElevenLabs SDK mode: SDK handles mic/audio internally, skip manual streaming
-        if (agentModeRef.current === 'elevenlabs-sdk') return;
-
-        // ElevenLabs speech-to-speech expects 16 kHz PCM input
-        if (agentModeRef.current === 'elevenlabs') {
-          const eleven = elevenSessionRef.current;
-          if (eleven && eleven.isOpen()) {
-            let elData = buffer.data;
-            if (buffer.sampleRate && buffer.sampleRate !== ELEVENLABS_INPUT_RATE) {
-              elData = resampleInt16(elData, buffer.sampleRate, ELEVENLABS_INPUT_RATE);
-            }
-            eleven.appendAudio(encodePcm16ToBase64(elData));
-          }
-        }
-
         const session = voiceSessionRef.current;
         if (session && session.isOpen()) {
           let data = buffer.data;
@@ -222,14 +113,14 @@ export default function VoiceModeScreen({ navigation }) {
           session.appendAudio(encodePcm16ToBase64(data));
         }
 
-        // Accumulate audio chunks for local mode
+        // Accumulate audio chunks for local mode (keep as Int16Array for WAV encoding)
         if (localModeRef.current && audioChunksRef.current) {
           const existing = audioChunksRef.current;
-          const newData = new Uint8Array(existing.length + buffer.data.byteLength / 2);
-          newData.set(new Int16Array(existing.buffer), 0);
           const newChunk = new Int16Array(buffer.data.buffer, buffer.data.byteOffset, buffer.data.byteLength / 2);
-          newData.set(newChunk, existing.length);
-          audioChunksRef.current = newData;
+          const merged = new Int16Array(existing.length + newChunk.length);
+          merged.set(existing, 0);
+          merged.set(newChunk, existing.length);
+          audioChunksRef.current = merged;
         }
 
         const bytes = new Uint8Array(buffer.data);
@@ -390,14 +281,13 @@ export default function VoiceModeScreen({ navigation }) {
       if (xpTimer.current) clearTimeout(xpTimer.current);
       stopTTS();
       try { audioStreamObj && audioStreamObj.stop(); } catch {}
-      closeElevenSession();
       const session = voiceSessionRef.current;
       if (session) {
         try { session.close(); } catch {}
         voiceSessionRef.current = null;
       }
     };
-  }, [audioStreamObj, closeElevenSession]);
+  }, [audioStreamObj]);
 
   const addMessage = useCallback((role, text, pronunciation) => {
     setConversation((prev) => [
@@ -421,7 +311,6 @@ export default function VoiceModeScreen({ navigation }) {
       try { session.close(); } catch {}
       voiceSessionRef.current = null;
     }
-    closeElevenSession();
 
     const finish = () => {
       setOrbState('idle');
@@ -444,7 +333,7 @@ export default function VoiceModeScreen({ navigation }) {
     hapticXpGain();
     if (xpTimer.current) clearTimeout(xpTimer.current);
     xpTimer.current = setTimeout(() => setXpToastVisible(false), 2400);
-  }, [addMessage, addXp, closeElevenSession]);
+  }, [addMessage, addXp]);
 
   const handleRealtimeEvent = useCallback((event) => {
     if (!event || !event.type) return;
@@ -480,69 +369,6 @@ export default function VoiceModeScreen({ navigation }) {
     }
   }, [addMessage, finishRealtimeTurn]);
 
-  // ElevenLabs speech-to-speech events. The agent does its own turn detection:
-  // we accumulate transcript + audio, then finalize after a short audio silence.
-  const handleElevenlabsEvent = useCallback((event) => {
-    switch (event.type) {
-      case 'user_transcript': {
-        const t = event.user_transcription_event && event.user_transcription_event.user_transcript;
-        if (t && t.trim()) addMessage('user', t, null);
-        break;
-      }
-      case 'agent_response': {
-        const t = event.agent_response_event && event.agent_response_event.agent_response;
-        if (t) transcriptRef.current = t;
-        break;
-      }
-      case 'agent_response_correction': {
-        const t =
-          event.agent_response_correction_event &&
-          event.agent_response_correction_event.corrected_agent_response;
-        if (t) transcriptRef.current = t;
-        break;
-      }
-      case 'interruption':
-        // User spoke over Sulti — drop the partial reply audio, keep going.
-        audioRef.current = '';
-        break;
-      case 'audio': {
-        const b64 = event.audio_event && event.audio_event.audio_base_64;
-        if (!b64) break;
-        if (elevenIdleTimer.current) {
-          clearTimeout(elevenIdleTimer.current);
-          elevenIdleTimer.current = null;
-        }
-        const firstChunk = !audioRef.current;
-        audioRef.current += b64;
-        if (firstChunk) {
-          setOrbState('speaking');
-          hapticAIBeginsSpeaking();
-        }
-        if (elevenFinalizeTimer.current) clearTimeout(elevenFinalizeTimer.current);
-        elevenFinalizeTimer.current = setTimeout(() => {
-          const rate =
-            elevenSessionRef.current && elevenSessionRef.current.outputSampleRate
-              ? elevenSessionRef.current.outputSampleRate
-              : 24000;
-          finishRealtimeTurn({ transcript: transcriptRef.current, audio: audioRef.current, sampleRate: rate });
-          transcriptRef.current = '';
-          audioRef.current = '';
-        }, 900);
-        break;
-      }
-      case 'error':
-        console.warn('ElevenLabs session error:', event.error || event.message || event);
-        if (!isRecordingRef.current) {
-          closeElevenSession();
-          setOrbState('idle');
-          hapticError();
-        }
-        break;
-      default:
-        break;
-    }
-  }, [addMessage, finishRealtimeTurn, closeElevenSession]);
-
   const abortRecording = useCallback(() => {
     isRecordingRef.current = false;
     setRecording(false);
@@ -551,7 +377,6 @@ export default function VoiceModeScreen({ navigation }) {
       durationTimer.current = null;
     }
     try { audioStreamObj && audioStreamObj.stop(); } catch {}
-    closeElevenSession();
     const session = voiceSessionRef.current;
     if (session) {
       try { session.close(); } catch {}
@@ -559,7 +384,7 @@ export default function VoiceModeScreen({ navigation }) {
     }
     agentModeRef.current = null;
     setOrbState('idle');
-  }, [audioStreamObj, closeElevenSession]);
+  }, [audioStreamObj]);
 
   const startRecording = useCallback(async () => {
     if (isConnectingRef.current || isRecordingRef.current) return;
@@ -574,89 +399,43 @@ export default function VoiceModeScreen({ navigation }) {
 
       setOrbState('thinking');
 
-      // Prefer ElevenLabs Conversational AI SDK, then raw WebSocket fallback, then xAI realtime, then local mode
+      // Prefer xAI realtime when configured, otherwise local mode (Voicebox TTS/STT via server)
       let useLocalMode = false;
-      let connected = false;
 
-      // Try the ElevenLabs React Native SDK first (WebRTC, lower latency)
       try {
-        const overrides = buildElevenlabsOverrides(langRef.current);
-        await elevenConversation.startSession({
-          agentId: ELEVENLABS_AGENT_ID,
-          overrides,
-        });
-        agentModeRef.current = 'elevenlabs-sdk';
-        connected = true;
-      } catch (sdkErr) {
-        console.warn('ElevenLabs SDK startSession failed, trying WebSocket fallback:', sdkErr);
-        connected = false;
-      }
-
-      // Fallback: try raw WebSocket ElevenLabs session
-      if (!connected) {
-        try {
-          const elCfg = await fetchElevenlabsConfig(langRef.current);
-          if (elCfg && elCfg.signed_url) {
-            const eleven = new ElevenLabsVoiceSession({
-              url: elCfg.signed_url,
-              language: langRef.current,
-              overridesAllowed: !!elCfg.overrides_allowed,
-              onEvent: (e) => handleElevenEventRef.current && handleElevenEventRef.current(e),
-              onError: () => {},
-              onClose: () => {},
-            });
-            await eleven.open();
-            elevenSessionRef.current = eleven;
-            agentModeRef.current = 'elevenlabs';
-            connected = true;
-          }
-        } catch (e) {
-          connected = false;
-        }
-      }
-
-      if (!connected) {
-        try {
-          const config = await fetchVoiceAgentConfig();
-          if (!config.url || !config.token) {
-            useLocalMode = true;
-          } else {
-            const session = new VoiceRealtimeSession({
-              url: config.url,
-              token: config.token,
-              onEvent: (e) => handleRealtimeEventRef.current && handleRealtimeEventRef.current(e),
-              onError: () => {},
-              onClose: () => {},
-            });
-            await session.open();
-            session.configure(config.session);
-            voiceSessionRef.current = session;
-            agentModeRef.current = 'xai';
-            connected = true;
-          }
-        } catch (e) {
+        const config = await fetchVoiceAgentConfig();
+        if (!config.url || !config.token) {
           useLocalMode = true;
+        } else {
+          const session = new VoiceRealtimeSession({
+            url: config.url,
+            token: config.token,
+            onEvent: (e) => handleRealtimeEventRef.current && handleRealtimeEventRef.current(e),
+            onError: () => {},
+            onClose: () => {},
+          });
+          await session.open();
+          session.configure(config.session);
+          voiceSessionRef.current = session;
+          agentModeRef.current = 'xai';
         }
+      } catch (e) {
+        useLocalMode = true;
       }
 
       localModeRef.current = useLocalMode;
       if (useLocalMode) {
         agentModeRef.current = 'local';
-        audioChunksRef.current = new Uint8Array(0);
+        audioChunksRef.current = new Int16Array(0);
       }
 
-      // SDK mode handles mic/audio internally — only start expo-audio for non-SDK modes
-      if (agentModeRef.current !== 'elevenlabs-sdk') {
-        await audioStreamObj.start();
-      }
+      await audioStreamObj.start();
       transcriptRef.current = '';
       audioRef.current = '';
       isRecordingRef.current = true;
       setRecording(true);
       setRecordingDuration(0);
-      if (agentModeRef.current !== 'elevenlabs-sdk') {
-        setOrbState('listening');
-      }
+      setOrbState('listening');
       hapticMicStart();
       durationTimer.current = setInterval(() => {
         setRecordingDuration((d) => d + 1);
@@ -669,7 +448,7 @@ export default function VoiceModeScreen({ navigation }) {
     } finally {
       isConnectingRef.current = false;
     }
-  }, [audioStreamObj, elevenConversation]);
+  }, [audioStreamObj]);
 
   const speakReply = useCallback((text, rate = 0.85) => {
     stopTTS();
@@ -728,38 +507,9 @@ export default function VoiceModeScreen({ navigation }) {
     }
     setOrbState('thinking');
     hapticMicEnd();
-    // SDK mode: only stop expo-audio if we actually started it (non-SDK modes)
-    if (agentModeRef.current !== 'elevenlabs-sdk') {
-      try { audioStreamObj.stop(); } catch {}
-    }
+    try { audioStreamObj.stop(); } catch {}
 
-    if (agentModeRef.current === 'elevenlabs-sdk') {
-      // ElevenLabs SDK: the agent detects end-of-speech itself and streams the reply.
-      // We signal the SDK we're done talking; it will call onModeChange('idle') when done.
-      // Set a safety timeout in case the agent doesn't respond.
-      if (elevenIdleTimer.current) clearTimeout(elevenIdleTimer.current);
-      elevenIdleTimer.current = setTimeout(() => {
-        const hadReply = !!(transcriptRef.current);
-        if (!hadReply) {
-          setOrbState('idle');
-          hapticError();
-        }
-      }, 6000);
-    } else if (agentModeRef.current === 'elevenlabs') {
-      // Keep the socket open — the agent detects end-of-speech itself and
-      // streams the reply back. Bail out gracefully if nothing arrives.
-      if (elevenIdleTimer.current) clearTimeout(elevenIdleTimer.current);
-      elevenIdleTimer.current = setTimeout(() => {
-        const hadReply = !!(audioRef.current || transcriptRef.current);
-        closeElevenSession();
-        transcriptRef.current = '';
-        audioRef.current = '';
-        if (!hadReply) {
-          setOrbState('idle');
-          hapticError();
-        }
-      }, 4000);
-    } else if (localModeRef.current) {
+    if (localModeRef.current) {
       // Local mode: send accumulated audio to server for transcription + LLM + TTS
       const chunks = audioChunksRef.current;
       audioChunksRef.current = null;
@@ -806,11 +556,10 @@ export default function VoiceModeScreen({ navigation }) {
         setOrbState('idle');
       }
     }
-  }, [audioStreamObj, addMessage, addXp, speakReply, closeElevenSession, elevenConversation]);
+  }, [audioStreamObj, addMessage, addXp, speakReply]);
 
   useEffect(() => {
     handleRealtimeEventRef.current = handleRealtimeEvent;
-    handleElevenEventRef.current = handleElevenlabsEvent;
   });
 
   useEffect(() => {
@@ -884,7 +633,6 @@ export default function VoiceModeScreen({ navigation }) {
     isSpeakingRef.current = false;
     isRecordingRef.current = false;
     try { audioStreamObj && audioStreamObj.stop(); } catch {}
-    closeElevenSession();
     const session = voiceSessionRef.current;
     if (session) {
       try { session.close(); } catch {}
@@ -903,7 +651,7 @@ export default function VoiceModeScreen({ navigation }) {
       return prev;
     });
     navigation.goBack();
-  }, [audioStreamObj, navigation, closeElevenSession]);
+  }, [audioStreamObj, navigation]);
 
   const onSuggestion = useCallback((label) => {
     hapticTap();

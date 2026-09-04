@@ -59,7 +59,9 @@ export function GameProvider({ children }) {
       if (badgesVal) setBadges(JSON.parse(badgesVal));
       if (achievementsVal) setAchievements(JSON.parse(achievementsVal));
       if (lastActiveVal) setLastActive(lastActiveVal);
-    } catch {} finally {
+    } catch (e) {
+      console.warn('[GameContext] Failed to load game state:', e.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -177,7 +179,9 @@ export function GameProvider({ children }) {
     }
     try {
       await api.checkAchievements({ xp: currentXp, streak, dailyXp, dailyGoal });
-    } catch {}
+    } catch (e) {
+      console.warn('[GameContext] Failed to check achievements:', e.message);
+    }
   };
 
   const syncToServer = async (data) => {

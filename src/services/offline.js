@@ -33,7 +33,9 @@ export const offline = {
         cachedAt: Date.now(),
       };
       await AsyncStorage.setItem(TUTOR_CACHE_KEY, JSON.stringify(cache));
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to cache tutor response:', e.message);
+    }
   },
 
   async getCachedTutorResponse(situation) {
@@ -47,7 +49,8 @@ export const offline = {
       const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
       if (age > MAX_AGE) return null;
       return entry.response;
-    } catch {
+    } catch (e) {
+      console.warn('[Offline] Failed to get cached tutor response:', e.message);
       return null;
     }
   },
@@ -61,7 +64,9 @@ export const offline = {
         cachedAt: Date.now(),
       };
       await AsyncStorage.setItem(LESSON_CACHE_KEY, JSON.stringify(cache));
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to cache lesson:', e.message);
+    }
   },
 
   async getCachedLesson(situation) {
@@ -75,7 +80,8 @@ export const offline = {
       const MAX_AGE = 14 * 24 * 60 * 60 * 1000;
       if (age > MAX_AGE) return null;
       return entry;
-    } catch {
+    } catch (e) {
+      console.warn('[Offline] Failed to get cached lesson:', e.message);
       return null;
     }
   },
@@ -86,7 +92,9 @@ export const offline = {
         phrases,
         cachedAt: Date.now(),
       }));
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to cache vocabulary:', e.message);
+    }
   },
 
   async getCachedVocabulary() {
@@ -98,7 +106,8 @@ export const offline = {
       const MAX_AGE = 24 * 60 * 60 * 1000;
       if (age > MAX_AGE) return null;
       return cache.phrases;
-    } catch {
+    } catch (e) {
+      console.warn('[Offline] Failed to get cached vocabulary:', e.message);
       return null;
     }
   },
@@ -109,7 +118,9 @@ export const offline = {
         lexicon,
         cachedAt: Date.now(),
       }));
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to cache lexicon:', e.message);
+    }
   },
 
   async getCachedLexicon() {
@@ -121,7 +132,8 @@ export const offline = {
       const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
       if (age > MAX_AGE) return null;
       return cache.lexicon;
-    } catch {
+    } catch (e) {
+      console.warn('[Offline] Failed to get cached lexicon:', e.message);
       return null;
     }
   },
@@ -132,7 +144,9 @@ export const offline = {
       const queue = raw ? JSON.parse(raw) : [];
       queue.push({ ...operation, queuedAt: Date.now() });
       await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to enqueue sync:', e.message);
+    }
   },
 
   async processSyncQueue(syncFn) {
@@ -159,7 +173,9 @@ export const offline = {
       } else {
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to process sync queue:', e.message);
+    }
   },
 
   async clearAllCache() {
@@ -169,7 +185,9 @@ export const offline = {
       if (cacheKeys.length > 0) {
         await AsyncStorage.multiRemove(cacheKeys);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Offline] Failed to clear cache:', e.message);
+    }
   },
 };
 

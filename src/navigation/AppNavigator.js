@@ -7,6 +7,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import LoadingState from '../components/LoadingState';
 import BottomTabBar from '../components/BottomTabBar';
+import ScreenBoundary from '../components/ScreenBoundary';
 import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -40,11 +41,21 @@ function MainTabs() {
       tabBar={(props) => <BottomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="Learn" component={LearnScreen} options={{ tabBarLabel: 'Learn' }} />
-      <Tab.Screen name="SULTI" component={SultiTutorScreen} options={{ tabBarLabel: 'SULTI' }} />
-      <Tab.Screen name="Community" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+      <Tab.Screen name="Home" options={{ tabBarLabel: 'Home' }}>
+        {(props) => <ScreenBoundary screenName="Home"><DashboardScreen {...props} /></ScreenBoundary>}
+      </Tab.Screen>
+      <Tab.Screen name="Learn" options={{ tabBarLabel: 'Learn' }}>
+        {(props) => <ScreenBoundary screenName="Learn"><LearnScreen {...props} /></ScreenBoundary>}
+      </Tab.Screen>
+      <Tab.Screen name="SULTI" options={{ tabBarLabel: 'SULTI' }}>
+        {(props) => <ScreenBoundary screenName="SULTI"><SultiTutorScreen {...props} /></ScreenBoundary>}
+      </Tab.Screen>
+      <Tab.Screen name="Community" options={{ tabBarLabel: 'Community' }}>
+        {(props) => <ScreenBoundary screenName="Community"><CommunityScreen {...props} /></ScreenBoundary>}
+      </Tab.Screen>
+      <Tab.Screen name="Profile" options={{ tabBarLabel: 'Profile' }}>
+        {(props) => <ScreenBoundary screenName="Profile"><ProfileScreen {...props} /></ScreenBoundary>}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }
@@ -97,16 +108,36 @@ export default function AppNavigator() {
           {user ? (
             <>
               <Stack.Screen name="Main" component={MainTabs} />
-              <Stack.Screen name="Pronunciation" component={PronunciationScreen} options={authScreenOptions} />
-              <Stack.Screen name="Flashcards" component={FlashcardsScreen} options={authScreenOptions} />
-              <Stack.Screen name="VocabularyReview" component={VocabularyReviewScreen} options={authScreenOptions} />
-              <Stack.Screen name="Achievements" component={AchievementsScreen} options={authScreenOptions} />
-              <Stack.Screen name="Notifications" component={NotificationsScreen} options={authScreenOptions} />
-              <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={authScreenOptions} />
-              <Stack.Screen name="ARScene" component={ARSceneScreen} options={authScreenOptions} />
-              <Stack.Screen name="VoiceMode" component={VoiceModeScreen} options={{ presentation: 'modal', animation: 'fade' }} />
-              <Stack.Screen name="WhisperAI" component={WhisperAIScreen} options={authScreenOptions} />
-              <Stack.Screen name="Phrasebook" component={ConversationScreen} options={authScreenOptions} />
+              <Stack.Screen name="Pronunciation" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Pronunciation"><PronunciationScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="Flashcards" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Flashcards"><FlashcardsScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="VocabularyReview" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="VocabularyReview"><VocabularyReviewScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="Achievements" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Achievements"><AchievementsScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="Notifications" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Notifications"><NotificationsScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="Leaderboard" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Leaderboard"><LeaderboardScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="ARScene" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="ARScene"><ARSceneScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="VoiceMode" options={{ presentation: 'modal', animation: 'fade' }}>
+                {(props) => <ScreenBoundary screenName="VoiceMode"><VoiceModeScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="WhisperAI" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="WhisperAI"><WhisperAIScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
+              <Stack.Screen name="Phrasebook" options={authScreenOptions}>
+                {(props) => <ScreenBoundary screenName="Phrasebook"><ConversationScreen {...props} /></ScreenBoundary>}
+              </Stack.Screen>
               <Stack.Screen name="ScenarioPractice" component={ScenarioPracticeScreen} options={authScreenOptions} />
               <Stack.Screen name="Grammar" component={GrammarScreen} options={authScreenOptions} />
               <Stack.Screen name="Listening" component={ListeningScreen} options={authScreenOptions} />

@@ -84,7 +84,7 @@ router.post('/promote', async (req, res) => {
     }
 
     await (db as any).update(schema.users)
-      .set({ role: 'admin' })
+      .set({ role: 'admin', status: 'approved' })
       .where(eq(schema.users.email, email));
     success(res, null, `User ${email} promoted to admin`);
   } catch (err) {

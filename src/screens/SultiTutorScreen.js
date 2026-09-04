@@ -186,7 +186,9 @@ export default function SultiTutorScreen({ navigation, route }) {
     try {
       const raw = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
       if (raw) setChatHistory(JSON.parse(raw));
-    } catch {}
+    } catch (e) {
+      console.warn('[SultiTutor] Failed to load chat history:', e.message);
+    }
   }
 
   useEffect(() => {
@@ -203,7 +205,9 @@ export default function SultiTutorScreen({ navigation, route }) {
     try {
       const d = await api.getTutorLevel();
       setLevel(d);
-    } catch {}
+    } catch (e) {
+      console.warn('[SultiTutor] Failed to load level:', e.message);
+    }
   };
 
   const persistChatHistory = async () => {
@@ -222,7 +226,9 @@ export default function SultiTutorScreen({ navigation, route }) {
     setChatHistory(merged);
     try {
       await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(merged));
-    } catch {}
+    } catch (e) {
+      console.warn('[SultiTutor] Failed to persist chat history:', e.message);
+    }
   };
 
   const loadConversation = (record) => {

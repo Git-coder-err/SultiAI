@@ -20,6 +20,7 @@ export const users = sqliteTable('users', {
   learningLang: text('learning_lang').default('Bisaya'),
   country: text('country'),
   role: text('role').notNull().default('user'),
+  status: text('status').notNull().default('approved'),
   isVerified: integer('is_verified').default(0),
   createdAt: text('created_at').default(`datetime('now')`),
 });

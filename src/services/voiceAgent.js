@@ -2,28 +2,6 @@ import { api } from './api';
 
 export const REALTIME_INPUT_RATE = 24000;
 
-// ── ElevenLabs Conversational AI Agent Config ──────────────────────────
-// Pulled from the deployed agent (agent_2501m0rx2v6hf9hrf5j98zhgf25t)
-export const ELEVENLABS_AGENT_ID = 'agent_2501m0rx2v6hf9hrf5j98zhgf25t';
-export const ELEVENLABS_INPUT_RATE = 16000;   // pcm_16000 — user input format
-export const ELEVENLABS_OUTPUT_RATE = 16000;  // pcm_16000 — agent output format
-export const ELEVENLABS_VOICE_ID = 'cjVigY5qzO86Huf0OWal';
-export const ELEVENLABS_TTS_MODEL = 'eleven_v3_conversational';
-
-// Language code mapping (ElevenLabs agent default is "fil")
-const LANGUAGE_CODES = {
-  tagalog: 'fil',
-  bisaya: 'ceb',
-  english: 'en',
-};
-
-const LANGUAGE_NAMES = {
-  bisaya: 'Bisaya (Cebuano)',
-  tagalog: 'Tagalog',
-  english: 'English',
-};
-
-// ── Fetch signed URL for WebSocket fallback ───────────────────────────
 export async function fetchVoiceAgentConfig() {
   try {
     return await api.agentToken();
@@ -41,58 +19,9 @@ export async function checkVoiceMode() {
   return {
     realtime: status.realtime,
     local_available: status.local_available ?? true,
-    elevenlabs_available: !!(status.elevenlabs && status.elevenlabs.available),
+    voicebox_available: !!(status.voicebox && status.voicebox.available),
   };
 }
-
-// ── Build overrides for the ElevenLabs agent ──────────────────────────
-// These are sent via the SDK startSession or WebSocket init message.
-// The agent has "text_only: true" by default — we override to false for audio.
-export function buildElevenlabsOverrides(language = 'tagalog') {
-  const langCode = LANGUAGE_CODES[language] || 'fil';
-
-  return {
-    conversation: {
-      text_only: false,          // Enable audio mode (agent default is text-only)
-    },
-    agent: {
-      language: langCode,        // Switch language per user preference
-    },
-    tts: {
-      voice_id: ELEVENLABS_VOICE_ID,
-    },
-  };
-}
-
-// ── Fetch ElevenLabs config from server ───────────────────────────────
-export async function fetchElevenlabsConfig(language = 'tagalog') {
-  const config = await api.elevenlabsSession();
-  const languageCode = LANGUAGE_CODES[language] || 'fil';
-  const overrides = buildElevenlabsOverrides(language);
-
-  return {
-    ...config,
-    language,
-    language_code: languageCode,
-    overrides,
-  };
-}
-
-// ── Build the agent prompt (used for WebSocket fallback overrides) ────
-export function buildElevenlabsPrompt(language = 'tagalog') {
-  const langName = LANGUAGE_NAMES[language] || LANGUAGE_NAMES.tagalog;
-  return `You are "Sulti", a friendly and patient ${langName} language tutor for the SultiAI app.
-Help non-native speakers build conversational fluency, proper pronunciation, and real-world confidence in speaking ${langName}.
-
-RULES:
-- Keep every reply CONCISE: 1 to 3 short sentences so it feels like a live conversation.
-- Speak plain text only — never use markdown symbols, bullets, emojis, or code blocks; your words are read aloud by TTS.
-- Respond primarily in ${langName}, mixed with friendly English explanations when the learner struggles. Switch to full ${langName} immersion only if the learner asks.
-- Gently correct grammar or pronunciation mistakes first, then continue the conversation naturally.
-- When teaching a new word, say the word slowly, give its English meaning, then use it in a simple example sentence.`;
-}
-
-// ── Audio encoding helpers ────────────────────────────────────────────
 
 export function encodePcm16ToBase64(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
@@ -156,8 +85,6 @@ export function resampleInt16(arrayBuffer, fromRate, toRate) {
   return out.buffer;
 }
 
-// ── xAI Realtime Session ─────────────────────────────────────────────
-
 export function buildSessionUpdate(session) {
   return {
     type: 'session.update',
@@ -215,7 +142,7 @@ export class VoiceRealtimeSession {
         }
         if (this.onEvent) this.onEvent(msg);
       };
-      ws.onerror = (event) => {
+      ws.onerror = () => {
         if (this._rejectOpen) {
           this._rejectOpen(new Error('WebSocket error'));
           this._resolveOpen = null;
@@ -223,7 +150,7 @@ export class VoiceRealtimeSession {
         }
         if (this.onError) this.onError(event);
       };
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         if (this._rejectOpen) {
           this._rejectOpen(new Error('WebSocket closed before opening'));
           this._resolveOpen = null;
@@ -256,130 +183,6 @@ export class VoiceRealtimeSession {
     if (!this.isOpen()) return;
     this.ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
     this.ws.send(JSON.stringify({ type: 'response.create' }));
-  }
-
-  close() {
-    try {
-      if (this.ws) this.ws.close();
-    } catch {}
-    this.ws = null;
-  }
-}
-
-// ── ElevenLabs WebSocket Session (fallback when SDK isn't available) ──
-// Protocol: wss conversation — first message is conversation_initiation_client_data,
-// then user_audio_chunk frames in; server streams audio/user_transcript/agent_response back.
-export class ElevenLabsVoiceSession {
-  constructor({ url, language = 'tagalog', overridesAllowed = false, onEvent, onError, onClose }) {
-    this.url = url;
-    this.language = language;
-    this.overridesAllowed = !!overridesAllowed;
-    this.onEvent = onEvent;
-    this.onError = onError;
-    this.onClose = onClose;
-    this.outputSampleRate = ELEVENLABS_OUTPUT_RATE; // pcm_16000 per agent config
-    this.conversationId = null;
-    this.ws = null;
-    this._resolveOpen = null;
-    this._rejectOpen = null;
-  }
-
-  open() {
-    if (this.ws) this.close();
-    return new Promise((resolve, reject) => {
-      this._resolveOpen = resolve;
-      this._rejectOpen = reject;
-      let ws;
-      try {
-        ws = new WebSocket(this.url);
-      } catch (e) {
-        reject(e);
-        return;
-      }
-      this.ws = ws;
-      ws.onopen = () => {
-        // Build the conversation_initiation_client_data with overrides
-        const init = { type: 'conversation_initiation_client_data' };
-
-        if (this.overridesAllowed) {
-          const overrides = buildElevenlabsOverrides(this.language);
-          init.conversation_config_override = overrides;
-        }
-
-        try {
-          ws.send(JSON.stringify(init));
-        } catch (e) {
-          reject(e);
-          return;
-        }
-        if (this._resolveOpen) {
-          this._resolveOpen();
-          this._resolveOpen = null;
-          this._rejectOpen = null;
-        }
-      };
-      ws.onmessage = (event) => {
-        let msg;
-        try {
-          msg = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        if (!msg || !msg.type) return;
-
-        // Keep-alive: reply to pings immediately so the socket stays healthy.
-        if (msg.type === 'ping') {
-          try {
-            ws.send(
-              JSON.stringify({ type: 'pong', event_id: msg.ping_event && msg.ping_event.event_id })
-            );
-          } catch {}
-          return;
-        }
-
-        if (msg.type === 'conversation_initiation_metadata') {
-          const meta = msg.conversation_initiation_metadata_event || {};
-          const fmt = meta.agent_output_audio_format || '';
-          const rateMatch = /pcm_(\d+)/.exec(fmt);
-          if (rateMatch) this.outputSampleRate = parseInt(rateMatch[1], 10);
-          this.conversationId = meta.conversation_id || this.conversationId;
-        }
-
-        if (this.onEvent) this.onEvent(msg);
-      };
-      ws.onerror = () => {
-        if (this._rejectOpen) {
-          this._rejectOpen(new Error('ElevenLabs WebSocket error'));
-          this._resolveOpen = null;
-          this._rejectOpen = null;
-        }
-        if (this.onError) this.onError(event);
-      };
-      ws.onclose = (event) => {
-        if (this._rejectOpen) {
-          this._rejectOpen(new Error('ElevenLabs WebSocket closed before opening'));
-          this._resolveOpen = null;
-          this._rejectOpen = null;
-        }
-        if (this.onClose) this.onClose(event);
-      };
-    });
-  }
-
-  isOpen() {
-    return !!(this.ws && this.ws.readyState === WebSocket.OPEN);
-  }
-
-  appendAudio(base64) {
-    if (!this.isOpen()) return false;
-    this.ws.send(JSON.stringify({ user_audio_chunk: base64 }));
-    return true;
-  }
-
-  sendTextMessage(text) {
-    if (!this.isOpen()) return false;
-    this.ws.send(JSON.stringify({ type: 'user_message', text }));
-    return true;
   }
 
   close() {

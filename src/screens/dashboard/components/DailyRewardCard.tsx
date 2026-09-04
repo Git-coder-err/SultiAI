@@ -24,7 +24,9 @@ export function DailyRewardCard() {
         const last = await AsyncStorage.getItem(DAILY_REWARD_KEY);
         const today = new Date().toDateString();
         setClaimed(last === today);
-      } catch {}
+      } catch (e) {
+        console.warn('[DailyReward] Failed to load reward state:', e);
+      }
     })();
   }, [getAnimationDuration]);
 
@@ -41,14 +43,18 @@ export function DailyRewardCard() {
       setClaimed(true);
       try {
         await AsyncStorage.setItem(DAILY_REWARD_KEY, new Date().toDateString());
-      } catch {}
+      } catch (e) {
+        console.warn('[DailyReward] Failed to save reward state:', e);
+      }
     } catch {
       addXp(25, 'daily_reward');
       addCoins(20);
       setClaimed(true);
       try {
         await AsyncStorage.setItem(DAILY_REWARD_KEY, new Date().toDateString());
-      } catch {}
+      } catch (e) {
+        console.warn('[DailyReward] Failed to save fallback reward state:', e);
+      }
     } finally {
       setClaiming(false);
     }
